@@ -24,7 +24,10 @@ MT, H2, R1 — not character names, so swapping a body in doesn't invalidate a s
 **Timeline and assignments.** Each step of the fight is a row: when it happens, which slide
 explains it, what each seat presses, and what each player gets told. The action picker searches
 the game's own Action sheet and filters to the seat's job, so a Scholar's list is a Scholar's
-list. Every seat can take several actions on the same step, each with a note.
+list. By default it shows cooldowns only — anything on a 30 second or longer recast, plus the
+role actions — which is mitigation, utility and burst windows without the rotation. Untick
+**Cooldowns only** in the picker for the full kit. Every seat can take several actions on the
+same step, each with a note.
 
 **Following the fight.** During a pull the plan drives itself. A boss cast that one of your
 steps is anchored to switches the slide the instant it is seen; a step firing its call moves the

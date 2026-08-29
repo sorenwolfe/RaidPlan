@@ -128,6 +128,9 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>Let the overlay be dragged with the mouse.</summary>
     public bool OverlayUnlocked { get; set; }
 
+    /// <summary>Show only cooldowns in the action picker, rather than a job's whole kit.</summary>
+    public bool CooldownsOnly { get; set; } = true;
+
     /// <summary>Print every detected boss cast to the log window, for building timelines.</summary>
     public bool LogDetectedCasts { get; set; }
 

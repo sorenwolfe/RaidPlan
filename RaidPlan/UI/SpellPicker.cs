@@ -20,6 +20,7 @@ public sealed class SpellPicker
     private string? lastQuery;
     private uint lastJob = uint.MaxValue;
     private bool lastPlayerOnly = true;
+    private bool lastCooldownsOnly = true;
 
     /// <summary>
     /// Draws the picker. Returns true when the selection changed.
@@ -67,16 +68,45 @@ public sealed class SpellPicker
             return false;
         }
 
-        ImGui.SetNextItemWidth(-1f);
+        var cooldownsOnly = Plugin.Config.CooldownsOnly;
+
+        if (playerActionsOnly)
+        {
+            ImGui.SetNextItemWidth(UiHelpers.WidthLeaving("Cooldowns only"));
+        }
+        else
+        {
+            ImGui.SetNextItemWidth(-1f);
+        }
+
         UiHelpers.InputTextHint("##spell-search", "Type to search…", ref search, 128);
 
-        if (search != lastQuery || jobId != lastJob || playerActionsOnly != lastPlayerOnly)
+        if (playerActionsOnly)
+        {
+            ImGui.SameLine();
+            if (ImGui.Checkbox("Cooldowns only", ref cooldownsOnly))
+            {
+                Plugin.Config.CooldownsOnly = cooldownsOnly;
+                Plugin.SaveConfig();
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "Anything on a 30 second or longer recast, plus the role actions.\n" +
+                    "That's mitigation, utility and burst windows, without the rotation.");
+            }
+        }
+
+        if (search != lastQuery || jobId != lastJob || playerActionsOnly != lastPlayerOnly ||
+            cooldownsOnly != lastCooldownsOnly)
         {
             lastQuery = search;
             lastJob = jobId;
             lastPlayerOnly = playerActionsOnly;
+            lastCooldownsOnly = cooldownsOnly;
             results = playerActionsOnly
-                ? Plugin.Actions.SearchPlayerActions(search, jobId)
+                ? Plugin.Actions.SearchPlayerActions(search, jobId, cooldownsOnly)
                 : Plugin.Actions.SearchAllActions(search);
         }
 

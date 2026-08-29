@@ -23,6 +23,12 @@ public sealed class ActionEntry
     public byte Level { get; init; }
     public float RecastSeconds { get; init; }
     public string JobAbbreviation { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Worth putting on a raid plan. Anything on a real cooldown, plus the role actions, which is
+    /// mitigation, utility and burst windows — and excludes the rotation, which nobody assigns.
+    /// </summary>
+    public bool IsCooldown { get; init; }
 }
 
 /// <summary>Minimal job record used to colour and filter the spell picker.</summary>
@@ -43,6 +49,7 @@ public sealed class JobEntry
 public sealed class ActionIndex
 {
     private readonly List<ActionEntry> playerActions = new();
+    private readonly List<ActionEntry> playerCooldowns = new();
     private readonly List<ActionEntry> allActions = new();
     private readonly Dictionary<uint, ActionEntry> byId = new();
     private readonly Dictionary<uint, JobEntry> jobsById = new();
@@ -64,8 +71,8 @@ public sealed class ActionIndex
                 Build();
                 Ready = true;
                 Plugin.Log.Information(
-                    "Action index ready: {Player} player actions, {All} total, {Jobs} jobs.",
-                    playerActions.Count, allActions.Count, jobsById.Count);
+                    "Action index ready: {Cooldowns} cooldowns of {Player} player actions, {All} total, {Jobs} jobs.",
+                    playerCooldowns.Count, playerActions.Count, allActions.Count, jobsById.Count);
             }
             catch (Exception ex)
             {
@@ -98,6 +105,9 @@ public sealed class ActionIndex
 
             var isPlayerAction = !row.IsPvP && (row.ClassJobLevel > 0 || row.IsRoleAction);
 
+            var recast = row.Recast100ms / 10f;
+            var isCooldown = ActionFilter.IsCooldown(recast, row.IsRoleAction, isPlayerAction);
+
             var entry = new ActionEntry
             {
                 RowId = row.RowId,
@@ -109,7 +119,8 @@ public sealed class ActionIndex
                 IsRoleAction = row.IsRoleAction,
                 IsPlayerAction = isPlayerAction,
                 Level = row.ClassJobLevel,
-                RecastSeconds = row.Recast100ms / 10f,
+                RecastSeconds = recast,
+                IsCooldown = isCooldown,
                 JobAbbreviation = jobsById.TryGetValue(jobId, out var job) ? job.Abbreviation : string.Empty,
             };
 
@@ -118,10 +129,14 @@ public sealed class ActionIndex
 
             if (isPlayerAction)
                 playerActions.Add(entry);
+
+            if (isCooldown)
+                playerCooldowns.Add(entry);
         }
 
         allActions.Sort(static (a, b) => string.CompareOrdinal(a.SearchName, b.SearchName));
         playerActions.Sort(static (a, b) => string.CompareOrdinal(a.SearchName, b.SearchName));
+        playerCooldowns.Sort(static (a, b) => string.CompareOrdinal(a.SearchName, b.SearchName));
 
         BuildCategoryMap();
     }
@@ -233,10 +248,15 @@ public sealed class ActionIndex
     /// Searches player-usable actions, optionally narrowed to one job. Exact and prefix matches
     /// are ranked above matches buried in the middle of a name.
     /// </summary>
-    public List<ActionEntry> SearchPlayerActions(string query, uint jobId, int limit = 60)
+    public List<ActionEntry> SearchPlayerActions(string query, uint jobId, bool cooldownsOnly, int limit = 60)
     {
-        return Search(playerActions, query, jobId, limit);
+        var source = cooldownsOnly ? playerCooldowns : playerActions;
+        return Search(source, query, jobId, limit);
     }
+
+    /// <summary>How many of a job's actions survive the cooldown filter, for the UI to show.</summary>
+    public int CooldownCount(uint jobId) =>
+        playerCooldowns.Count(e => jobId == 0 || CanJobUse(e, jobId));
 
     /// <summary>Searches every named action, which is what boss casts live in.</summary>
     public List<ActionEntry> SearchAllActions(string query, int limit = 60)
