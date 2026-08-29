@@ -115,6 +115,27 @@ to names you might have spelled differently.
 
 ---
 
+## Importing from FF Logs
+
+The **Import** tab takes an FF Logs link and pulls the fight's timeline straight in — every boss
+cast with a bar, in order, with occurrence numbers. If your seats have jobs set, it also lifts the
+cooldowns those players actually pressed and puts them on the step they were pressed for.
+
+A cooldown counts as being *for* a mechanic if it went out within 20 seconds before the cast, or
+6 seconds after it. That window is adjustable; longer catches pre-planned mitigation, shorter
+avoids grabbing the wrong mechanic in a busy stretch.
+
+Steps already on your timeline are left alone, so importing a second pull only fills gaps, and
+re-importing the same one changes nothing.
+
+**This needs an API key.** FF Logs has no anonymous API, so you make a client at
+[fflogs.com/api/clients](https://www.fflogs.com/api/clients/) — free, takes a minute, any name,
+`http://localhost` as the redirect URL — and paste the id and secret into the Import tab. Only
+whoever builds the plans needs one, not the whole static. The credentials are stored in this
+plugin's config on your machine and are sent nowhere but fflogs.com.
+
+---
+
 ## Commands
 
 | Command | Effect |

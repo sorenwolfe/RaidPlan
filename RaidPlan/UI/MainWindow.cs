@@ -213,6 +213,12 @@ public sealed partial class MainWindow : Window, IDisposable
             ImGui.EndTabItem();
         }
 
+        if (ImGui.BeginTabItem("Import", ImGuiTabItemFlags.None))
+        {
+            DrawImportTab(plan);
+            ImGui.EndTabItem();
+        }
+
         if (ImGui.BeginTabItem("Learned", ImGuiTabItemFlags.None))
         {
             DrawLearnedTab(plan);

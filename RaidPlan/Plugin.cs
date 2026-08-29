@@ -5,6 +5,7 @@ using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using RaidPlan.Services;
+using RaidPlan.Services.FfLogs;
 using RaidPlan.UI;
 
 namespace RaidPlan;
@@ -36,6 +37,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static RosterResolver Roster { get; private set; } = null!;
     internal static EncounterLearner Learner { get; private set; } = null!;
     internal static SlideDirector Director { get; private set; } = null!;
+    internal static FfLogsClient FfLogs { get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("RaidPlan");
 
@@ -63,6 +65,7 @@ public sealed class Plugin : IDalamudPlugin
         Learner = new EncounterLearner();
         Reminders = new ReminderEngine();
         Director = new SlideDirector();
+        FfLogs = new FfLogsClient();
 
         mainWindow = new MainWindow();
         configWindow = new ConfigWindow();
@@ -211,6 +214,7 @@ public sealed class Plugin : IDalamudPlugin
         configWindow.Dispose();
         overlayWindow.Dispose();
 
+        FfLogs.Dispose();
         Director.Dispose();
         Reminders.Dispose();
         Learner.Dispose();

@@ -128,6 +128,14 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>Let the overlay be dragged with the mouse.</summary>
     public bool OverlayUnlocked { get; set; }
 
+    /// <summary>FF Logs API client id, from fflogs.com/api/clients. Only needed for log import.</summary>
+    public string FfLogsClientId { get; set; } = string.Empty;
+
+    public string FfLogsClientSecret { get; set; } = string.Empty;
+
+    /// <summary>Last report someone imported, so the box is not empty next time.</summary>
+    public string LastReportUrl { get; set; } = string.Empty;
+
     /// <summary>Show only cooldowns in the action picker, rather than a job's whole kit.</summary>
     public bool CooldownsOnly { get; set; } = true;
 
