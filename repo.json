@@ -3,7 +3,7 @@
     "Author": "SorenWolfe",
     "Name": "RaidPlan",
     "InternalName": "RaidPlan",
-    "AssemblyVersion": "0.1.1.0",
+    "AssemblyVersion": "0.1.2.0",
     "Description": "Build, share and call raid strategies without leaving the game. Slide-based arena diagrams, per-player cooldown assignments, and shotcall reminders anchored to real boss casts or to timings the plugin learns from your own pulls.",
     "Punchline": "Build, share and call raid strategies without leaving the game.",
     "ApplicableVersion": "any",

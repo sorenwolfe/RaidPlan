@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
@@ -41,12 +42,22 @@ public sealed class Plugin : IDalamudPlugin
 
     public readonly WindowSystem WindowSystem = new("RaidPlan");
 
+    /// <summary>
+    /// Cancelled on unload so worker threads stop before the assembly goes away. Replaced in the
+    /// constructor rather than only initialised there, in case a reload reuses the load context.
+    /// </summary>
+    private static CancellationTokenSource shutdown = new();
+
+    internal static CancellationToken Shutdown => shutdown.Token;
+
     private MainWindow mainWindow = null!;
     private ConfigWindow configWindow = null!;
     private OverlayWindow overlayWindow = null!;
 
     public Plugin()
     {
+        shutdown = new CancellationTokenSource();
+
         Config = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         if (Config.Teams.Count == 0)
             Config.Teams.Add(new TeamProfile());
@@ -54,7 +65,7 @@ public sealed class Plugin : IDalamudPlugin
             Config.ActiveTeamId = Config.Teams[0].Id;
 
         Actions = new ActionIndex();
-        Actions.BuildAsync();
+        Actions.BuildAsync(Shutdown);
 
         Plans = new PlanStore();
         Roster = new RosterResolver();
@@ -187,40 +198,58 @@ public sealed class Plugin : IDalamudPlugin
 
     public static void SaveConfig() => PluginInterface.SavePluginConfig(Config);
 
-    public void Dispose()
+    /// <summary>
+    /// Teardown has to finish even when a step of it throws. A half-unloaded plugin leaves its
+    /// commands registered and its callbacks pointing at an assembly that is going away, and the
+    /// next version then fails to load — which looks to the player like the update is broken.
+    /// </summary>
+    private static void Safely(Action step, string what)
     {
         try
         {
-            Plans.SaveAll();
-            Learner.SaveAll();
-            PluginInterface.SavePluginConfig(Config);
+            step();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to persist RaidPlan state on unload.");
+            Log.Error(ex, "RaidPlan could not {What} while unloading.", what);
         }
+    }
 
-        Director.SlideRequested -= mainWindow.OnDirectedSlide;
-        Director.ResetRequested -= mainWindow.OnDirectedReset;
-        DutyState.DutyStarted -= OnDutyStarted;
-        DutyState.DutyCompleted -= OnDutyCompleted;
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfig;
-        PluginInterface.UiBuilder.OpenMainUi -= ToggleMain;
+    public void Dispose()
+    {
+        // Nothing running in the background should still be touching us by the time the rest of
+        // this method starts pulling things apart.
+        Safely(shutdown.Cancel, "stop background work");
 
-        WindowSystem.RemoveAllWindows();
+        // Detach from the game before anything else. Everything below is ours and can be leaked
+        // without consequence; these five are Dalamud's and must come off no matter what.
+        Safely(() => CommandManager.RemoveHandler(CommandName), "remove " + CommandName);
+        Safely(() => CommandManager.RemoveHandler(CommandAlias), "remove " + CommandAlias);
+        Safely(() => PluginInterface.UiBuilder.Draw -= WindowSystem.Draw, "detach the draw hook");
+        Safely(() => PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfig, "detach the config button");
+        Safely(() => PluginInterface.UiBuilder.OpenMainUi -= ToggleMain, "detach the main button");
+        Safely(() => DutyState.DutyStarted -= OnDutyStarted, "detach duty start");
+        Safely(() => DutyState.DutyCompleted -= OnDutyCompleted, "detach duty completion");
 
-        mainWindow.Dispose();
-        configWindow.Dispose();
-        overlayWindow.Dispose();
+        Safely(() => Director.SlideRequested -= mainWindow.OnDirectedSlide, "detach the slide director");
+        Safely(() => Director.ResetRequested -= mainWindow.OnDirectedReset, "detach the slide reset");
 
-        FfLogs.Dispose();
-        Director.Dispose();
-        Reminders.Dispose();
-        Learner.Dispose();
-        Encounter.Dispose();
+        Safely(Director.Dispose, "shut down the slide director");
+        Safely(Reminders.Dispose, "shut down the reminder engine");
+        Safely(Learner.Dispose, "shut down the learner");
+        Safely(Encounter.Dispose, "shut down the encounter monitor");
+        Safely(FfLogs.Dispose, "close the FF Logs client");
 
-        CommandManager.RemoveHandler(CommandName);
-        CommandManager.RemoveHandler(CommandAlias);
+        Safely(WindowSystem.RemoveAllWindows, "remove the windows");
+        Safely(mainWindow.Dispose, "dispose the planner window");
+        Safely(configWindow.Dispose, "dispose the settings window");
+        Safely(overlayWindow.Dispose, "dispose the overlay");
+
+        // Saving comes last. A disk error here used to abandon the rest of the teardown.
+        Safely(Plans.SaveAll, "save the plans");
+        Safely(Learner.SaveAll, "save the learned timings");
+        Safely(() => PluginInterface.SavePluginConfig(Config), "save the settings");
+
+        Safely(shutdown.Dispose, "dispose the shutdown token");
     }
 }

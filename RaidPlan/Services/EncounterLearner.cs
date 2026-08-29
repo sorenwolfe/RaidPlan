@@ -321,12 +321,14 @@ public sealed class EncounterLearner : IDisposable
 
     public void Dispose()
     {
-        CommitPull(cleared: false);
-        SaveAll();
-
+        // Unhook first. Committing the pull touches disk, and a failure there must not leave us
+        // subscribed to events that will fire into an unloaded assembly.
         Plugin.Encounter.CombatStarted -= OnCombatStarted;
         Plugin.Encounter.CombatEnded -= OnCombatEnded;
         Plugin.Encounter.CastStarted -= OnCastStarted;
         Plugin.ClientState.TerritoryChanged -= OnTerritoryChanged;
+
+        CommitPull(cleared: false);
+        SaveAll();
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Lumina.Excel.Sheets;
 using RaidPlan.Model;
@@ -62,13 +63,21 @@ public sealed class ActionIndex
     public IReadOnlyList<JobEntry> Jobs { get; private set; } = Array.Empty<JobEntry>();
 
     /// <summary>Kick off the index build on a worker thread; the UI stays responsive meanwhile.</summary>
-    public Task BuildAsync()
+    public Task BuildAsync(CancellationToken cancel = default)
     {
         return Task.Run(() =>
         {
             try
             {
+                if (cancel.IsCancellationRequested)
+                    return;
+
                 Build();
+
+                // Unloaded while we were reading sheets. Say nothing and touch nothing.
+                if (cancel.IsCancellationRequested)
+                    return;
+
                 Ready = true;
                 Plugin.Log.Information(
                     "Action index ready: {Cooldowns} cooldowns of {Player} player actions, {All} total, {Jobs} jobs.",

@@ -332,18 +332,31 @@ public sealed partial class MainWindow
         importStatusLine = string.Empty;
         importDetail = string.Empty;
 
+        var cancel = Plugin.Shutdown;
+
         Task.Run(async () =>
         {
             try
             {
-                await work(CancellationToken.None);
+                await work(cancel);
+            }
+            catch (OperationCanceledException)
+            {
+                // Plugin is unloading mid-request. Nothing left to report to.
+                return;
             }
             catch (FfLogsException ex)
             {
+                if (cancel.IsCancellationRequested)
+                    return;
+
                 Fail(ex.Message, ex.Detail);
             }
             catch (Exception ex)
             {
+                if (cancel.IsCancellationRequested)
+                    return;
+
                 Fail("Import failed: " + ex.Message);
                 Plugin.Log.Error(ex, "FF Logs import failed.");
             }
@@ -351,7 +364,7 @@ public sealed partial class MainWindow
             {
                 importBusy = false;
             }
-        });
+        }, cancel);
     }
 
     private void Fail(string message, string? detail = null)
