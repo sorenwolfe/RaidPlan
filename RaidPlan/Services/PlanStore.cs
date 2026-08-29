@@ -45,13 +45,7 @@ public sealed class PlanStore
                 if (doc == null)
                     continue;
 
-                doc.Arena ??= new ArenaSettings();
-                doc.Roster ??= new List<PlayerSlot>();
-                doc.Slides ??= new List<Slide>();
-                doc.Timeline ??= new List<TimelineEntry>();
-                if (doc.Slides.Count == 0)
-                    doc.Slides.Add(new Slide { Title = "Slide 1" });
-
+                PlanNormaliser.Normalise(doc);
                 plans[doc.Id] = doc;
             }
             catch (Exception ex)
@@ -117,7 +111,7 @@ public sealed class PlanStore
     public RaidPlanDocument Duplicate(RaidPlanDocument source)
     {
         var json = JsonConvert.SerializeObject(source, Settings);
-        var copy = JsonConvert.DeserializeObject<RaidPlanDocument>(json, Settings)!;
+        var copy = PlanNormaliser.Normalise(JsonConvert.DeserializeObject<RaidPlanDocument>(json, Settings)!);
         copy.Id = Guid.NewGuid().ToString("N");
         copy.Name = source.Name + " (copy)";
         plans[copy.Id] = copy;

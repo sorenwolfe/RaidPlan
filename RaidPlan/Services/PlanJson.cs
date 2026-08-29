@@ -83,12 +83,15 @@ public sealed class CompactVector2Converter : JsonConverter<Vector2>
 /// <summary>Serializer settings shared by the on-disk library and the share codes.</summary>
 public static class PlanJson
 {
-    /// <summary>For share codes: defaulted properties are dropped and filled back in on read.</summary>
+    /// <summary>
+    /// For share codes. Ignore, not IgnoreAndPopulate: Populate sets absent members to default(T),
+    /// which nulls every collection we deliberately left out for being empty.
+    /// </summary>
     public static JsonSerializerSettings Compact() => new()
     {
         Formatting = Formatting.None,
         NullValueHandling = NullValueHandling.Ignore,
-        DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate,
+        DefaultValueHandling = DefaultValueHandling.Ignore,
         Converters = { new CompactVector2Converter() },
     };
 
@@ -97,7 +100,7 @@ public static class PlanJson
     {
         Formatting = Formatting.Indented,
         NullValueHandling = NullValueHandling.Ignore,
-        DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate,
+        DefaultValueHandling = DefaultValueHandling.Ignore,
         Converters = { new CompactVector2Converter() },
     };
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using Newtonsoft.Json;
 using System.Linq;
 
 namespace RaidPlan.Model;
@@ -94,6 +95,7 @@ public sealed class LearnedCast
     /// Tolerance scales with how late the cast is: two seconds of spread three minutes in is
     /// normal pull-pace variation, the same two seconds on an opener is not.
     /// </remarks>
+    [JsonIgnore]
     public float Confidence
     {
         get
@@ -111,6 +113,7 @@ public sealed class LearnedCast
         }
     }
 
+    [JsonIgnore]
     public string ConfidenceLabel => Confidence switch
     {
         >= 0.75f => "solid",

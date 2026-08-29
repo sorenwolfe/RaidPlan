@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using Newtonsoft.Json;
 
 namespace RaidPlan.Model;
 
@@ -37,6 +38,7 @@ public sealed class PlayerSlot
     [DefaultValue("")]
     public string Placeholder { get; set; } = string.Empty;
 
+    [JsonIgnore]
     public string DisplayName
     {
         get
@@ -53,5 +55,6 @@ public sealed class PlayerSlot
         }
     }
 
+    [JsonIgnore]
     public bool IsEmpty => string.IsNullOrWhiteSpace(Name) && JobId == 0;
 }

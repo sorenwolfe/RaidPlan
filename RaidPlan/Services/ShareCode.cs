@@ -71,41 +71,13 @@ public static class ShareCode
                 return false;
             }
 
-            Normalise(parsed);
-            document = parsed;
+            document = PlanNormaliser.Normalise(parsed);
             return true;
         }
         catch (Exception ex)
         {
             error = "The code is damaged or incomplete — check that the whole line was copied. " + ex.Message;
             return false;
-        }
-    }
-
-    /// <summary>Fills in anything an older or hand-edited plan might be missing.</summary>
-    private static void Normalise(RaidPlanDocument doc)
-    {
-        doc.Arena ??= new ArenaSettings();
-        doc.Roster ??= new();
-        doc.Slides ??= new();
-        doc.Timeline ??= new();
-
-        if (doc.Slides.Count == 0)
-            doc.Slides.Add(new Slide { Title = "Slide 1" });
-
-        if (doc.Roster.Count == 0)
-        {
-            var template = RaidPlanDocument.CreateDefault();
-            doc.Roster = template.Roster;
-        }
-
-        foreach (var slide in doc.Slides)
-            slide.Items ??= new();
-
-        foreach (var entry in doc.Timeline)
-        {
-            entry.Assignments ??= new();
-            entry.SlotCallText ??= new();
         }
     }
 
