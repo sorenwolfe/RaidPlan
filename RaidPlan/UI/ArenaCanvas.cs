@@ -1,0 +1,783 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using Dalamud.Bindings.ImGui;
+using RaidPlan.Model;
+using RaidPlan.Services;
+
+namespace RaidPlan.UI;
+
+/// <summary>What a click on the arena does.</summary>
+public enum CanvasTool
+{
+    Select,
+    PlayerToken,
+    EnemyToken,
+    Waymark,
+    Label,
+    Zone,
+    Arrow,
+    Tether,
+    Pen,
+}
+
+/// <summary>
+/// The arena widget: draws a slide and lets you move things around on it.
+/// Everything is stored in normalised 0-1 coordinates, so the same plan renders identically in a
+/// small docked window and a maximised one.
+/// </summary>
+public sealed class ArenaCanvas
+{
+    private const string CanvasId = "##raidplan-arena";
+
+    private Vector2 origin;
+    private float side;
+
+    private string? draggingId;
+    private CanvasItem? drawingStroke;
+    private Vector2 pendingStart;
+    private bool hasPendingStart;
+
+    public CanvasTool Tool { get; set; } = CanvasTool.Select;
+
+    /// <summary>Colour applied to newly created items.</summary>
+    public uint BrushColor { get; set; } = 0xFF4FA3FF;
+
+    /// <summary>Zone shape used when the Zone tool places something.</summary>
+    public ZoneShape BrushZone { get; set; } = ZoneShape.Circle;
+
+    /// <summary>Waymark letter placed by the Waymark tool.</summary>
+    public string BrushWaymark { get; set; } = "A";
+
+    /// <summary>Roster seat bound to newly placed player tokens.</summary>
+    public int BrushSlot { get; set; }
+
+    public string? SelectedId { get; private set; }
+
+    public CanvasItem? GetSelected(Slide slide) =>
+        SelectedId == null ? null : slide.Items.FirstOrDefault(i => i.Id == SelectedId);
+
+    public void Select(string? id) => SelectedId = id;
+
+    /// <summary>Draws the slide and processes interaction. Returns true if the plan was modified.</summary>
+    public bool Draw(RaidPlanDocument plan, Slide slide, Vector2 available, bool editable)
+    {
+        var changed = false;
+
+        var floor = 120f * UiHelpers.Scale;
+        if (available.X < floor || available.Y < floor)
+        {
+            ImGui.TextDisabled("Not enough room to draw the arena.");
+            return false;
+        }
+
+        side = MathF.Min(available.X, available.Y);
+        var canvasSize = new Vector2(side, side);
+
+        // Centre the square inside whatever room we were given.
+        var pad = MathF.Max(0f, (available.X - side) * 0.5f);
+        if (pad > 0)
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + pad);
+
+        origin = ImGui.GetCursorScreenPos();
+
+        var drawList = ImGui.GetWindowDrawList();
+        drawList.PushClipRect(origin, origin + canvasSize, true);
+
+        DrawArenaBackground(drawList, plan.Arena, canvasSize);
+
+        foreach (var item in slide.Items.OrderBy(i => i.Layer).ThenBy(i => (int)i.Kind))
+            DrawItem(drawList, plan, item);
+
+        drawList.PopClipRect();
+
+        ImGui.InvisibleButton(CanvasId, canvasSize, ImGuiButtonFlags.MouseButtonLeft | ImGuiButtonFlags.MouseButtonRight);
+
+        if (editable)
+            changed |= HandleInteraction(plan, slide);
+
+        // Outline last so it sits above everything, including the hit region.
+        drawList.AddRect(origin, origin + canvasSize, 0x40FFFFFF, 4f, ImDrawFlags.None, 1f);
+
+        return changed;
+    }
+
+    // ---------------------------------------------------------------- coordinates
+
+    public Vector2 ToScreen(Vector2 normalised) => origin + (normalised * side);
+
+    public Vector2 ToNormalised(Vector2 screen) => (screen - origin) / side;
+
+    private float Len(float normalisedLength) => normalisedLength * side;
+
+    // ---------------------------------------------------------------- arena
+
+    private void DrawArenaBackground(ImDrawListPtr drawList, ArenaSettings arena, Vector2 size)
+    {
+        var min = origin;
+        var max = origin + size;
+        var centre = origin + (size * 0.5f);
+        var half = size * 0.5f;
+
+        drawList.AddRectFilled(min, max, arena.BackgroundColor, 4f);
+
+        switch (arena.Shape)
+        {
+            case ArenaShape.Circle:
+                drawList.AddCircleFilled(centre, half.X * 0.94f, UiHelpers.Darken(arena.BackgroundColor, -0.0f), 96);
+                drawList.AddCircle(centre, half.X * 0.94f, arena.LineColor, 96, 2f);
+                break;
+
+            case ArenaShape.Square:
+                drawList.AddRect(min + (size * 0.03f), max - (size * 0.03f), arena.LineColor, 0f, ImDrawFlags.None, 2f);
+                break;
+
+            case ArenaShape.Rectangle:
+            {
+                var ratio = MathF.Max(0.2f, arena.AspectRatio);
+                var w = half.X * 0.94f;
+                var h = w / ratio;
+                if (h > half.Y * 0.94f)
+                {
+                    h = half.Y * 0.94f;
+                    w = h * ratio;
+                }
+
+                drawList.AddRect(centre - new Vector2(w, h), centre + new Vector2(w, h), arena.LineColor, 0f, ImDrawFlags.None, 2f);
+                break;
+            }
+
+            case ArenaShape.Octagon:
+                DrawRegularPolygon(drawList, centre, half.X * 0.94f, 8, 22.5f, arena.LineColor);
+                break;
+
+            case ArenaShape.Hexagon:
+                DrawRegularPolygon(drawList, centre, half.X * 0.94f, 6, 0f, arena.LineColor);
+                break;
+        }
+
+        if (arena.ShowGrid && arena.GridDivisions > 1)
+        {
+            var step = size.X / arena.GridDivisions;
+            for (var i = 1; i < arena.GridDivisions; i++)
+            {
+                var x = min.X + (step * i);
+                var y = min.Y + (step * i);
+                drawList.AddLine(new Vector2(x, min.Y), new Vector2(x, max.Y), arena.GridColor, 1f);
+                drawList.AddLine(new Vector2(min.X, y), new Vector2(max.X, y), arena.GridColor, 1f);
+            }
+        }
+
+        if (arena.ShowCardinals)
+        {
+            var inset = size.X * 0.035f;
+            UiHelpers.CenteredShadowText(drawList, new Vector2(centre.X, min.Y + inset), "N", 0xB0FFFFFF);
+            UiHelpers.CenteredShadowText(drawList, new Vector2(centre.X, max.Y - inset), "S", 0x80FFFFFF);
+            UiHelpers.CenteredShadowText(drawList, new Vector2(max.X - inset, centre.Y), "E", 0x80FFFFFF);
+            UiHelpers.CenteredShadowText(drawList, new Vector2(min.X + inset, centre.Y), "W", 0x80FFFFFF);
+        }
+
+        if (arena.ShowWaymarkGuides)
+        {
+            var r = half.X * 0.78f;
+            var labels = new[] { "A", "1", "B", "2", "C", "3", "D", "4" };
+            for (var i = 0; i < 8; i++)
+            {
+                var angle = (-90f + (i * 45f)) * (MathF.PI / 180f);
+                var p = centre + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * r;
+                drawList.AddCircle(p, size.X * 0.022f, 0x40FFFFFF, 20, 1f);
+                UiHelpers.CenteredShadowText(drawList, p, labels[i], 0x60FFFFFF);
+            }
+        }
+    }
+
+    private static void DrawRegularPolygon(ImDrawListPtr drawList, Vector2 centre, float radius, int sides, float rotationDegrees, uint colour)
+    {
+        drawList.PathClear();
+        for (var i = 0; i < sides; i++)
+        {
+            var angle = ((360f / sides * i) + rotationDegrees - 90f) * (MathF.PI / 180f);
+            drawList.PathLineTo(centre + (new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius));
+        }
+
+        drawList.PathStroke(colour, ImDrawFlags.Closed, 2f);
+    }
+
+    // ---------------------------------------------------------------- items
+
+    private void DrawItem(ImDrawListPtr drawList, RaidPlanDocument plan, CanvasItem item)
+    {
+        var selected = item.Id == SelectedId;
+        var centre = ToScreen(item.Position);
+
+        switch (item.Kind)
+        {
+            case CanvasItemKind.Zone:
+                DrawZone(drawList, item);
+                break;
+
+            case CanvasItemKind.PlayerToken:
+                DrawPlayerToken(drawList, plan, item, centre);
+                break;
+
+            case CanvasItemKind.EnemyToken:
+            {
+                var r = Len(item.Radius);
+                drawList.AddCircleFilled(centre, r, UiHelpers.WithAlpha(item.Color, 0.85f), 32);
+                drawList.AddCircle(centre, r, 0xFF101010, 32, 2f);
+                UiHelpers.CenteredShadowText(drawList, centre,
+                    string.IsNullOrEmpty(item.Text) ? "B" : item.Text,
+                    UiHelpers.ReadableTextOn(item.Color));
+                break;
+            }
+
+            case CanvasItemKind.Waymark:
+                DrawWaymark(drawList, item, centre);
+                break;
+
+            case CanvasItemKind.Label:
+            {
+                var text = string.IsNullOrEmpty(item.Text) ? "text" : item.Text;
+                var size = UiHelpers.TextSize(text);
+                var pos = centre - (size * 0.5f);
+                drawList.AddRectFilled(pos - new Vector2(4, 2), pos + size + new Vector2(4, 2), 0x90000000, 3f);
+                drawList.AddText(pos, item.Color, text);
+                break;
+            }
+
+            case CanvasItemKind.Arrow:
+                DrawArrow(drawList, item);
+                break;
+
+            case CanvasItemKind.Tether:
+                DrawPath(drawList, item, closed: false);
+                break;
+
+            case CanvasItemKind.Freehand:
+                DrawPath(drawList, item, closed: false);
+                break;
+        }
+
+        if (selected)
+            DrawSelectionHint(drawList, item, centre);
+    }
+
+    private void DrawPlayerToken(ImDrawListPtr drawList, RaidPlanDocument plan, CanvasItem item, Vector2 centre)
+    {
+        var radius = Len(item.Radius);
+
+        var colour = item.Color;
+        var label = item.Text;
+        uint jobId = 0;
+
+        if (item.SlotIndex >= 0 && item.SlotIndex < plan.Roster.Count)
+        {
+            var slot = plan.Roster[item.SlotIndex];
+            colour = slot.Color != 0 ? slot.Color : RoleColors.Default(slot.Role);
+            jobId = slot.JobId;
+            if (string.IsNullOrEmpty(label))
+                label = slot.DisplayName;
+        }
+
+        if (string.IsNullOrEmpty(label))
+            label = "?";
+
+        drawList.AddCircleFilled(centre, radius, UiHelpers.WithAlpha(colour, 0.92f), 32);
+        drawList.AddCircle(centre, radius, 0xFF101010, 32, 2f);
+
+        // An explicit icon on the token wins, then the seat's job, then just the seat label.
+        var iconId = item.IconId != 0 ? item.IconId : JobIcons.For(jobId);
+
+        var half = new Vector2(radius * 0.78f, radius * 0.78f);
+        if (iconId == 0 || !UiHelpers.DrawIconAt(drawList, iconId, centre - half, centre + half, 0xFFFFFFFF))
+            UiHelpers.CenteredShadowText(drawList, centre, label, UiHelpers.ReadableTextOn(colour));
+        else if (radius > 18f * UiHelpers.Scale)
+            UiHelpers.CenteredShadowText(drawList, centre + new Vector2(0, radius + 7f), label, 0xFFFFFFFF);
+    }
+
+    private void DrawWaymark(ImDrawListPtr drawList, CanvasItem item, Vector2 centre)
+    {
+        var text = string.IsNullOrEmpty(item.Text) ? "A" : item.Text;
+        var colour = WaymarkColor(text);
+        var radius = Len(item.Radius * 0.8f);
+
+        if (text is "1" or "2" or "3" or "4")
+        {
+            drawList.AddRectFilled(centre - new Vector2(radius, radius), centre + new Vector2(radius, radius),
+                UiHelpers.WithAlpha(colour, 0.35f), 2f);
+            drawList.AddRect(centre - new Vector2(radius, radius), centre + new Vector2(radius, radius),
+                colour, 2f, ImDrawFlags.None, 2f);
+        }
+        else
+        {
+            drawList.AddCircleFilled(centre, radius, UiHelpers.WithAlpha(colour, 0.35f), 24);
+            drawList.AddCircle(centre, radius, colour, 24, 2f);
+        }
+
+        UiHelpers.CenteredShadowText(drawList, centre, text, 0xFFFFFFFF);
+    }
+
+    private static uint WaymarkColor(string mark) => mark switch
+    {
+        "A" or "1" => 0xFF4444EE, // red
+        "B" or "2" => 0xFF44DDEE, // yellow
+        "C" or "3" => 0xFFEE9944, // blue
+        "D" or "4" => 0xFFEE66CC, // purple
+        _ => 0xFFFFFFFF,
+    };
+
+    private void DrawZone(ImDrawListPtr drawList, CanvasItem item)
+    {
+        var centre = ToScreen(item.Position);
+        var fill = UiHelpers.WithAlpha(item.Color, 0.28f);
+        var edge = UiHelpers.WithAlpha(item.Color, 0.9f);
+
+        switch (item.Zone)
+        {
+            case ZoneShape.Circle:
+            {
+                var r = Len(item.Radius);
+                drawList.AddCircleFilled(centre, r, fill, 64);
+                drawList.AddCircle(centre, r, edge, 64, 2f);
+                break;
+            }
+
+            case ZoneShape.Donut:
+            {
+                var outer = Len(item.Radius);
+                var inner = Len(MathF.Min(item.InnerRadius, item.Radius * 0.95f));
+                const int segments = 64;
+                for (var i = 0; i < segments; i++)
+                {
+                    var a0 = MathF.Tau * i / segments;
+                    var a1 = MathF.Tau * (i + 1) / segments;
+                    var d0 = new Vector2(MathF.Cos(a0), MathF.Sin(a0));
+                    var d1 = new Vector2(MathF.Cos(a1), MathF.Sin(a1));
+                    var quad = new[]
+                    {
+                        centre + (d0 * inner),
+                        centre + (d0 * outer),
+                        centre + (d1 * outer),
+                        centre + (d1 * inner),
+                    };
+                    drawList.AddConvexPolyFilled(ref quad[0], 4, fill);
+                }
+
+                drawList.AddCircle(centre, outer, edge, 64, 2f);
+                drawList.AddCircle(centre, inner, edge, 64, 2f);
+                break;
+            }
+
+            case ZoneShape.Rectangle:
+            {
+                var e = new Vector2(Len(item.Extent.X), Len(item.Extent.Y));
+                var corners = new[]
+                {
+                    centre + UiHelpers.Rotate(new Vector2(-e.X, -e.Y), item.Rotation),
+                    centre + UiHelpers.Rotate(new Vector2(e.X, -e.Y), item.Rotation),
+                    centre + UiHelpers.Rotate(new Vector2(e.X, e.Y), item.Rotation),
+                    centre + UiHelpers.Rotate(new Vector2(-e.X, e.Y), item.Rotation),
+                };
+                drawList.AddConvexPolyFilled(ref corners[0], 4, fill);
+                drawList.AddPolyline(ref corners[0], 4, edge, ImDrawFlags.Closed, 2f);
+                break;
+            }
+
+            case ZoneShape.Cone:
+            {
+                var r = Len(item.Radius);
+                var halfSweep = MathF.Max(1f, item.ConeAngle) * 0.5f;
+                var start = (item.Rotation - 90f - halfSweep) * (MathF.PI / 180f);
+                var end = (item.Rotation - 90f + halfSweep) * (MathF.PI / 180f);
+
+                drawList.PathClear();
+                drawList.PathLineTo(centre);
+                drawList.PathArcTo(centre, r, start, end, 48);
+                drawList.PathFillConvex(fill);
+
+                drawList.PathClear();
+                drawList.PathLineTo(centre);
+                drawList.PathArcTo(centre, r, start, end, 48);
+                drawList.PathStroke(edge, ImDrawFlags.Closed, 2f);
+                break;
+            }
+
+            case ZoneShape.Line:
+            {
+                var halfWidth = Len(item.Extent.X);
+                var length = Len(item.Radius * 2f);
+                var corners = new[]
+                {
+                    centre + UiHelpers.Rotate(new Vector2(-halfWidth, 0), item.Rotation),
+                    centre + UiHelpers.Rotate(new Vector2(halfWidth, 0), item.Rotation),
+                    centre + UiHelpers.Rotate(new Vector2(halfWidth, -length), item.Rotation),
+                    centre + UiHelpers.Rotate(new Vector2(-halfWidth, -length), item.Rotation),
+                };
+                drawList.AddConvexPolyFilled(ref corners[0], 4, fill);
+                drawList.AddPolyline(ref corners[0], 4, edge, ImDrawFlags.Closed, 2f);
+                break;
+            }
+
+            case ZoneShape.Cross:
+            {
+                var arm = Len(item.Radius);
+                var thickness = Len(item.Extent.X);
+                DrawRotatedBar(drawList, centre, arm, thickness, item.Rotation, fill, edge);
+                DrawRotatedBar(drawList, centre, arm, thickness, item.Rotation + 90f, fill, edge);
+                break;
+            }
+        }
+    }
+
+    private static void DrawRotatedBar(ImDrawListPtr drawList, Vector2 centre, float halfLength, float halfWidth, float rotation, uint fill, uint edge)
+    {
+        var corners = new[]
+        {
+            centre + UiHelpers.Rotate(new Vector2(-halfLength, -halfWidth), rotation),
+            centre + UiHelpers.Rotate(new Vector2(halfLength, -halfWidth), rotation),
+            centre + UiHelpers.Rotate(new Vector2(halfLength, halfWidth), rotation),
+            centre + UiHelpers.Rotate(new Vector2(-halfLength, halfWidth), rotation),
+        };
+        drawList.AddConvexPolyFilled(ref corners[0], 4, fill);
+        drawList.AddPolyline(ref corners[0], 4, edge, ImDrawFlags.Closed, 2f);
+    }
+
+    private void DrawArrow(ImDrawListPtr drawList, CanvasItem item)
+    {
+        if (item.Points.Count < 2)
+            return;
+
+        var thickness = MathF.Max(1.5f, Len(item.Thickness));
+        var points = item.Points.Select(ToScreen).ToArray();
+        drawList.AddPolyline(ref points[0], points.Length, item.Color, ImDrawFlags.None, thickness);
+
+        var tip = points[^1];
+        var prev = points[^2];
+        var dir = tip - prev;
+        var length = dir.Length();
+        if (length < 0.001f)
+            return;
+
+        dir /= length;
+        var normal = new Vector2(-dir.Y, dir.X);
+        var head = MathF.Max(8f, thickness * 3.2f);
+
+        drawList.AddTriangleFilled(
+            tip,
+            tip - (dir * head) + (normal * head * 0.55f),
+            tip - (dir * head) - (normal * head * 0.55f),
+            item.Color);
+    }
+
+    private void DrawPath(ImDrawListPtr drawList, CanvasItem item, bool closed)
+    {
+        if (item.Points.Count < 2)
+            return;
+
+        var thickness = MathF.Max(1.5f, Len(item.Thickness));
+        var points = item.Points.Select(ToScreen).ToArray();
+        drawList.AddPolyline(ref points[0], points.Length, item.Color,
+            closed ? ImDrawFlags.Closed : ImDrawFlags.None, thickness);
+    }
+
+    private void DrawSelectionHint(ImDrawListPtr drawList, CanvasItem item, Vector2 centre)
+    {
+        var r = Len(MathF.Max(item.Radius, 0.03f)) + 5f;
+        if (item.Kind is CanvasItemKind.Arrow or CanvasItemKind.Tether or CanvasItemKind.Freehand && item.Points.Count > 0)
+        {
+            foreach (var p in item.Points.Select(ToScreen))
+                drawList.AddCircle(p, 4f, 0xFFFFFFFF, 12, 1.5f);
+            return;
+        }
+
+        drawList.AddCircle(centre, r, 0xFFFFFFFF, 40, 1.5f);
+        drawList.AddCircle(centre, r, 0x60000000, 40, 3f);
+    }
+
+    // ---------------------------------------------------------------- interaction
+
+    private bool HandleInteraction(RaidPlanDocument plan, Slide slide)
+    {
+        var changed = false;
+        var hovered = ImGui.IsItemHovered();
+        var mouse = ImGui.GetMousePos();
+        var normalised = ToNormalised(mouse);
+
+        if (hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        {
+            if (Tool == CanvasTool.Select)
+            {
+                var hit = HitTest(slide, normalised);
+                SelectedId = hit?.Id;
+                draggingId = hit is { Locked: false } ? hit.Id : null;
+            }
+            else if (Tool == CanvasTool.Pen)
+            {
+                drawingStroke = new CanvasItem
+                {
+                    Kind = CanvasItemKind.Freehand,
+                    Color = BrushColor,
+                    Points = new List<Vector2> { normalised },
+                    Position = normalised,
+                    Thickness = 0.006f,
+                };
+                slide.Items.Add(drawingStroke);
+                SelectedId = drawingStroke.Id;
+                changed = true;
+            }
+            else if (Tool is CanvasTool.Arrow or CanvasTool.Tether)
+            {
+                if (!hasPendingStart)
+                {
+                    pendingStart = normalised;
+                    hasPendingStart = true;
+                }
+                else
+                {
+                    var item = new CanvasItem
+                    {
+                        Kind = Tool == CanvasTool.Arrow ? CanvasItemKind.Arrow : CanvasItemKind.Tether,
+                        Color = BrushColor,
+                        Points = new List<Vector2> { pendingStart, normalised },
+                        Position = (pendingStart + normalised) * 0.5f,
+                        Thickness = Tool == CanvasTool.Arrow ? 0.008f : 0.005f,
+                    };
+                    slide.Items.Add(item);
+                    SelectedId = item.Id;
+                    hasPendingStart = false;
+                    changed = true;
+                }
+            }
+            else
+            {
+                var item = CreateForTool(normalised);
+                if (item != null)
+                {
+                    slide.Items.Add(item);
+                    SelectedId = item.Id;
+                    changed = true;
+                }
+            }
+        }
+
+        // Freehand: keep collecting while the button is down.
+        if (drawingStroke != null)
+        {
+            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                var last = drawingStroke.Points.Count > 0 ? drawingStroke.Points[^1] : normalised;
+                if (Vector2.Distance(last, normalised) > 0.004f)
+                {
+                    drawingStroke.Points.Add(normalised);
+                    changed = true;
+                }
+            }
+            else
+            {
+                if (drawingStroke.Points.Count < 2)
+                    slide.Items.Remove(drawingStroke);
+                drawingStroke = null;
+                changed = true;
+            }
+        }
+
+        // Dragging an existing item.
+        if (draggingId != null)
+        {
+            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                var delta = ImGui.GetIO().MouseDelta / side;
+                if (delta != Vector2.Zero)
+                {
+                    var item = slide.Items.FirstOrDefault(i => i.Id == draggingId);
+                    if (item != null)
+                    {
+                        item.Position += delta;
+                        for (var i = 0; i < item.Points.Count; i++)
+                            item.Points[i] += delta;
+                        changed = true;
+                    }
+                }
+            }
+            else
+            {
+                draggingId = null;
+            }
+        }
+
+        // Right click clears the pending arrow anchor, or deletes what is under the cursor.
+        if (hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+        {
+            if (hasPendingStart)
+            {
+                hasPendingStart = false;
+            }
+            else
+            {
+                var hit = HitTest(slide, normalised);
+                if (hit is { Locked: false })
+                {
+                    slide.Items.Remove(hit);
+                    if (SelectedId == hit.Id)
+                        SelectedId = null;
+                    changed = true;
+                }
+            }
+        }
+
+        if (hovered && ImGui.IsKeyPressed(ImGuiKey.Delete, false) && SelectedId != null)
+        {
+            var item = slide.Items.FirstOrDefault(i => i.Id == SelectedId);
+            if (item is { Locked: false })
+            {
+                slide.Items.Remove(item);
+                SelectedId = null;
+                changed = true;
+            }
+        }
+
+        // Preview line for a half-placed arrow.
+        if (hasPendingStart && hovered)
+        {
+            var drawList = ImGui.GetWindowDrawList();
+            drawList.AddLine(ToScreen(pendingStart), mouse, UiHelpers.WithAlpha(BrushColor, 0.6f), 2f);
+        }
+
+        return changed;
+    }
+
+    private CanvasItem? CreateForTool(Vector2 position)
+    {
+        return Tool switch
+        {
+            CanvasTool.PlayerToken => new CanvasItem
+            {
+                Kind = CanvasItemKind.PlayerToken,
+                Position = position,
+                Radius = 0.045f,
+                SlotIndex = BrushSlot,
+                Color = BrushColor,
+            },
+
+            CanvasTool.EnemyToken => new CanvasItem
+            {
+                Kind = CanvasItemKind.EnemyToken,
+                Position = position,
+                Radius = 0.06f,
+                Color = 0xFF2222AA,
+                Text = "B",
+            },
+
+            CanvasTool.Waymark => new CanvasItem
+            {
+                Kind = CanvasItemKind.Waymark,
+                Position = position,
+                Radius = 0.045f,
+                Text = BrushWaymark,
+            },
+
+            CanvasTool.Label => new CanvasItem
+            {
+                Kind = CanvasItemKind.Label,
+                Position = position,
+                Text = "New label",
+                Color = 0xFFFFFFFF,
+            },
+
+            CanvasTool.Zone => new CanvasItem
+            {
+                Kind = CanvasItemKind.Zone,
+                Zone = BrushZone,
+                Position = position,
+                Radius = BrushZone == ZoneShape.Line ? 0.25f : 0.18f,
+                InnerRadius = 0.09f,
+                Extent = BrushZone is ZoneShape.Line or ZoneShape.Cross ? new Vector2(0.05f, 0.05f) : new Vector2(0.15f, 0.1f),
+                Color = BrushColor,
+                ConeAngle = 90f,
+                Layer = -1,
+            },
+
+            _ => null,
+        };
+    }
+
+    private CanvasItem? HitTest(Slide slide, Vector2 position)
+    {
+        CanvasItem? best = null;
+        var bestLayer = int.MinValue;
+
+        foreach (var item in slide.Items)
+        {
+            if (item.Locked)
+                continue;
+
+            var hit = item.Kind switch
+            {
+                CanvasItemKind.PlayerToken or CanvasItemKind.EnemyToken or CanvasItemKind.Waymark =>
+                    Vector2.Distance(item.Position, position) <= MathF.Max(item.Radius, 0.03f),
+
+                CanvasItemKind.Label =>
+                    Vector2.Distance(item.Position, position) <= 0.05f,
+
+                CanvasItemKind.Zone =>
+                    HitZone(item, position),
+
+                CanvasItemKind.Arrow or CanvasItemKind.Tether or CanvasItemKind.Freehand =>
+                    HitPath(item, position),
+
+                _ => false,
+            };
+
+            if (!hit)
+                continue;
+
+            // Tokens should win over the big zones they sit on top of.
+            var layer = item.Layer * 10 + (item.Kind == CanvasItemKind.Zone ? 0 : 5);
+            if (layer >= bestLayer)
+            {
+                bestLayer = layer;
+                best = item;
+            }
+        }
+
+        return best;
+    }
+
+    private static bool HitZone(CanvasItem item, Vector2 position)
+    {
+        var d = Vector2.Distance(item.Position, position);
+        return item.Zone switch
+        {
+            ZoneShape.Circle or ZoneShape.Cone => d <= item.Radius,
+            ZoneShape.Donut => d <= item.Radius,
+            ZoneShape.Rectangle => MathF.Abs(position.X - item.Position.X) <= item.Extent.X + 0.02f &&
+                                   MathF.Abs(position.Y - item.Position.Y) <= item.Extent.Y + 0.02f,
+            ZoneShape.Line or ZoneShape.Cross => d <= MathF.Max(item.Radius, 0.06f),
+            _ => d <= 0.08f,
+        };
+    }
+
+    private static bool HitPath(CanvasItem item, Vector2 position)
+    {
+        const float tolerance = 0.02f;
+        for (var i = 0; i < item.Points.Count - 1; i++)
+        {
+            if (DistanceToSegment(position, item.Points[i], item.Points[i + 1]) <= tolerance)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var ab = b - a;
+        var lengthSquared = ab.LengthSquared();
+        if (lengthSquared < 1e-6f)
+            return Vector2.Distance(p, a);
+
+        var t = Math.Clamp(Vector2.Dot(p - a, ab) / lengthSquared, 0f, 1f);
+        return Vector2.Distance(p, a + (ab * t));
+    }
+}

@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+packages.lock.json
+
+# Dalamud plugin output
+*.zip
+!/.github/**/*.zip
+
+# Local Dalamud reference assemblies, if you keep them beside the project
+/dalamud/

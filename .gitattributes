@@ -1,0 +1,14 @@
+# Normalise line endings in the repository; check out whatever the platform prefers.
+* text=auto
+
+*.cs     text diff=csharp
+*.csproj text
+*.sln    text eol=crlf
+*.md     text
+*.json   text
+*.yml    text
+
+*.png  binary
+*.zip  binary
+*.dll  binary
+*.ico  binary
