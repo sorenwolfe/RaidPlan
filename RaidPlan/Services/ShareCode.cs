@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.IO.Compression;
 using System.Text;
 using Newtonsoft.Json;
@@ -19,7 +20,10 @@ public static class ShareCode
 
     public static string Encode(RaidPlanDocument document)
     {
-        var json = JsonConvert.SerializeObject(document, Settings);
+        // Backdrops are local files the person on the other end does not have, and an image would
+        // blow the code past what Discord will carry anyway. The drawing travels; the tracing
+        // reference it was made from does not.
+        var json = JsonConvert.SerializeObject(WithoutBackdrops(document), Settings);
         var raw = Encoding.UTF8.GetBytes(json);
 
         using var output = new MemoryStream();
@@ -97,6 +101,21 @@ public static class ShareCode
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>A copy with the tracing backdrops stripped, for sharing.</summary>
+    private static RaidPlanDocument WithoutBackdrops(RaidPlanDocument document)
+    {
+        if (document.Slides == null || !document.Slides.Any(s => s.HasBackdrop))
+            return document;
+
+        var copy = JsonConvert.DeserializeObject<RaidPlanDocument>(
+            JsonConvert.SerializeObject(document, Settings), Settings)!;
+
+        foreach (var slide in copy.Slides)
+            slide.BackdropId = string.Empty;
+
+        return copy;
     }
 
     private static string ToBase64Url(byte[] data)

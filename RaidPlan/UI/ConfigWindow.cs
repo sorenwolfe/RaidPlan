@@ -298,6 +298,16 @@ public sealed class ConfigWindow : Window, IDisposable
         }
 
         ImGui.Spacing();
+        ImGui.TextDisabled("FF Logs");
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Only needed for importing a fight's timeline from a log. Everything else works " +
+            "without it.");
+
+        ImGui.Separator();
+        FfLogsCredentialsPanel.Draw(showInstructions: true);
+
+        ImGui.Spacing();
         ImGui.TextDisabled("Look");
         ImGui.Separator();
 

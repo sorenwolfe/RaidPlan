@@ -34,12 +34,14 @@ public sealed class Plugin : IDalamudPlugin
     internal static Configuration Config { get; private set; } = null!;
     internal static ActionIndex Actions { get; private set; } = null!;
     internal static PlanStore Plans { get; private set; } = null!;
+    internal static BackdropStore Backdrops { get; private set; } = null!;
     internal static EncounterMonitor Encounter { get; private set; } = null!;
     internal static ReminderEngine Reminders { get; private set; } = null!;
     internal static RosterResolver Roster { get; private set; } = null!;
     internal static EncounterLearner Learner { get; private set; } = null!;
     internal static SlideDirector Director { get; private set; } = null!;
     internal static FfLogsClient FfLogs { get; private set; } = null!;
+    internal static FfLogsAuth FfLogsAuth { get; private set; } = null!;
     internal static ThemeFonts Fonts { get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("RaidPlan");
@@ -74,6 +76,7 @@ public sealed class Plugin : IDalamudPlugin
         Actions.BuildAsync(Shutdown);
 
         Plans = new PlanStore();
+        Backdrops = new BackdropStore();
         Roster = new RosterResolver();
 
         // Order matters here: the monitor produces the events, the learner and the reminder
@@ -83,6 +86,8 @@ public sealed class Plugin : IDalamudPlugin
         Reminders = new ReminderEngine();
         Director = new SlideDirector();
         FfLogs = new FfLogsClient();
+        FfLogsAuth = new FfLogsAuth();
+        FfLogsAuth.Forget(Config.FfLogsClientId, Config.FfLogsClientSecret);
         Fonts = new ThemeFonts();
 
         mainWindow = new MainWindow();
@@ -256,6 +261,7 @@ public sealed class Plugin : IDalamudPlugin
         Safely(Learner.Dispose, "shut down the learner");
         Safely(Encounter.Dispose, "shut down the encounter monitor");
         Safely(FfLogs.Dispose, "close the FF Logs client");
+        Safely(Backdrops.Dispose, "drop the backdrop textures");
         Safely(Fonts.Dispose, "release the font handles");
         Safely(Sprites.Forget, "drop the sprite handles");
 

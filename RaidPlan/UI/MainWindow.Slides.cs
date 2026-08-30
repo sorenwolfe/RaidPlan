@@ -205,6 +205,76 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// A reference picture under the arena, to draw a plan on top of rather than from memory.
+    /// Any screenshot works — a website, a Discord post, a photo of a whiteboard.
+    /// </summary>
+    private void DrawBackdropSettings()
+    {
+        var slide = CurrentSlide;
+        if (slide == null)
+            return;
+
+        ImGui.TextDisabled("Tracing picture");
+
+        if (slide.HasBackdrop)
+        {
+            var opacity = slide.BackdropOpacity;
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.SliderFloat("##backdrop-opacity", ref opacity, 0.05f, 1f, "%.2f", ImGuiSliderFlags.None))
+            {
+                slide.BackdropOpacity = opacity;
+                MarkDirty();
+            }
+
+            if (ImGui.IsItemHovered())
+                UiHelpers.Tooltip("How strongly the picture shows through. Turn it down as you draw over it.");
+
+            if (ImGui.Button("Remove picture", new Vector2(-1, 0)))
+            {
+                var old = slide.BackdropId;
+                slide.BackdropId = string.Empty;
+
+                // Only delete the file if no other slide is still using it.
+                if (Plan is { } doc && doc.Slides.All(other => other.BackdropId != old))
+                    Plugin.Backdrops.Forget(old);
+
+                MarkDirty();
+            }
+
+            ImGui.TextDisabled("Not sent with a share code.");
+            return;
+        }
+
+        ImGui.SetNextItemWidth(-1);
+        UiHelpers.InputTextHint("##backdrop-path", "Paste the path to an image file", ref backdropPath, 512);
+
+        if (ImGui.Button("Use this picture", new Vector2(-1, 0)))
+        {
+            var id = Plugin.Backdrops.Adopt(backdropPath, out var error);
+            if (id == null)
+            {
+                backdropError = error;
+            }
+            else
+            {
+                slide.BackdropId = id;
+                backdropPath = string.Empty;
+                backdropError = string.Empty;
+                MarkDirty();
+            }
+        }
+
+        if (backdropError.Length > 0)
+            ImGui.TextColored(UiHelpers.Pack(Palette.Vec(Palette.Danger)), backdropError);
+
+        ImGui.TextDisabled("Screenshot a plan, save it, paste the path here,");
+        ImGui.TextDisabled("then draw over it and fade it out.");
+    }
+
+    private string backdropPath = string.Empty;
+    private string backdropError = string.Empty;
+
     /// <summary>Slide title, where you are in the plan, and the two arrows for stepping through it.</summary>
     private void DrawSlideHeader(RaidPlanDocument plan, Slide slide)
     {
@@ -609,6 +679,9 @@ public sealed partial class MainWindow
         ImGui.TextDisabled("Arena");
         ImGui.Separator();
         ImGui.TextWrapped("Nothing is selected. Click something on the arena to edit it, or set up the arena itself here.");
+        ImGui.Spacing();
+
+        DrawBackdropSettings();
         ImGui.Spacing();
 
         var arena = plan.Arena;

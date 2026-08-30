@@ -24,6 +24,7 @@ public sealed partial class MainWindow
     private bool importBusy;
 
     private readonly ImportOptions importOptions = new();
+    private bool showCredentials;
 
     private void DrawImportTab(RaidPlanDocument plan)
     {
@@ -35,9 +36,25 @@ public sealed partial class MainWindow
 
         if (!HasCredentials())
         {
-            DrawCredentialSetup();
+            ImGui.Separator();
+            FfLogsCredentialsPanel.Draw(showInstructions: true);
             return;
         }
+
+        // Set up and working: one line, with a way back to the boxes.
+        FfLogsCredentialsPanel.DrawSummary();
+        ImGui.SameLine();
+        if (ImGui.SmallButton(showCredentials ? "Hide" : "Change"))
+            showCredentials = !showCredentials;
+
+        if (showCredentials)
+        {
+            ImGui.Spacing();
+            FfLogsCredentialsPanel.Draw(showInstructions: false);
+            ImGui.Separator();
+        }
+
+        ImGui.Spacing();
 
         if (string.IsNullOrEmpty(reportInput) && !string.IsNullOrEmpty(Plugin.Config.LastReportUrl))
             reportInput = Plugin.Config.LastReportUrl;
@@ -98,47 +115,11 @@ public sealed partial class MainWindow
             DrawPreviewAndApply(plan, loadedFight);
     }
 
-    private static bool HasCredentials() =>
-        !string.IsNullOrWhiteSpace(Plugin.Config.FfLogsClientId) &&
-        !string.IsNullOrWhiteSpace(Plugin.Config.FfLogsClientSecret);
-
-    private void DrawCredentialSetup()
-    {
-        ImGui.Separator();
-        ImGui.TextWrapped(
-            "FF Logs has no anonymous API, so this needs a client id and secret. They are free and " +
-            "take a minute to make — only whoever builds the plans needs them, not the whole static.");
-
-        ImGui.Spacing();
-        ImGui.TextDisabled("1.  Go to fflogs.com/api/clients and create a client.");
-        ImGui.TextDisabled("2.  Any name will do. Put http://localhost as the redirect URL.");
-        ImGui.TextDisabled("3.  Paste the id and secret below.");
-        ImGui.Spacing();
-
-        if (ImGui.Button("Copy the URL", Vector2.Zero))
-            ImGui.SetClipboardText("https://www.fflogs.com/api/clients/");
-
-        ImGui.Spacing();
-
-        var id = Plugin.Config.FfLogsClientId;
-        ImGui.SetNextItemWidth(320 * UiHelpers.Scale);
-        if (UiHelpers.InputTextHint("Client id", "", ref id, 128))
-        {
-            Plugin.Config.FfLogsClientId = id.Trim();
-            Plugin.SaveConfig();
-        }
-
-        var secret = Plugin.Config.FfLogsClientSecret;
-        ImGui.SetNextItemWidth(320 * UiHelpers.Scale);
-        if (UiHelpers.InputTextHint("Client secret", "", ref secret, 128, ImGuiInputTextFlags.Password))
-        {
-            Plugin.Config.FfLogsClientSecret = secret.Trim();
-            Plugin.SaveConfig();
-        }
-
-        ImGui.Spacing();
-        ImGui.TextDisabled("Stored in this plugin's config on your machine, and sent only to fflogs.com.");
-    }
+    /// <summary>
+    /// Credentials good enough to try an import with. Unchecked counts: someone who set them up
+    /// before this check existed should not be stopped from importing.
+    /// </summary>
+    private static bool HasCredentials() => Plugin.FfLogsAuth.Usable;
 
     private void DrawImportStatus()
     {

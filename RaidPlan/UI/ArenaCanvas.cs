@@ -94,6 +94,7 @@ public sealed class ArenaCanvas
         var drawList = ImGui.GetWindowDrawList();
         drawList.PushClipRect(origin, origin + canvasSize, true);
 
+        DrawBackdrop(drawList, slide, canvasSize);
         DrawArenaBackground(drawList, plan.Arena, canvasSize);
 
         foreach (var item in slide.Items.OrderBy(i => i.Layer).ThenBy(i => (int)i.Kind))
@@ -130,6 +131,31 @@ public sealed class ArenaCanvas
     private float Len(float normalisedLength) => normalisedLength * side;
 
     // ---------------------------------------------------------------- arena
+
+    /// <summary>
+    /// The tracing reference, drawn under everything. Fitted to the square without stretching, so
+    /// a wide screenshot keeps its proportions rather than being squashed onto the arena.
+    /// </summary>
+    private void DrawBackdrop(ImDrawListPtr drawList, Slide slide, Vector2 size)
+    {
+        if (!slide.HasBackdrop)
+            return;
+
+        var texture = Plugin.Backdrops.Get(slide.BackdropId);
+        if (texture == null || !texture.TryGetWrap(out var wrap, out _) || wrap == null)
+            return;
+
+        if (wrap.Width <= 0 || wrap.Height <= 0)
+            return;
+
+        var scale = MathF.Min(size.X / wrap.Width, size.Y / wrap.Height);
+        var drawn = new Vector2(wrap.Width * scale, wrap.Height * scale);
+        var offset = (size - drawn) * 0.5f;
+
+        var alpha = Math.Clamp(slide.BackdropOpacity, 0.05f, 1f);
+        drawList.AddImage(wrap.Handle, origin + offset, origin + offset + drawn,
+            Vector2.Zero, Vector2.One, UiHelpers.WithAlpha(0xFFFFFFFF, alpha));
+    }
 
     private void DrawArenaBackground(ImDrawListPtr drawList, ArenaSettings arena, Vector2 size)
     {

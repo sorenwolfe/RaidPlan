@@ -74,7 +74,9 @@ into them.
 **Import from FF Logs.** Paste a link to a log and RaidPlan pulls the fight's timeline straight
 in — and if the jobs match up, it can even copy the cooldowns those players actually pressed onto
 the right mechanics. This one needs a free key from FF Logs (they don't allow anonymous access);
-only the person building the plan needs it, not the whole group.
+only the person building the plan needs it, not the whole group. The key is checked the moment you
+paste it in, so a typo tells you straight away rather than on your first import, and you can change
+it later in settings.
 
 **A small window for during the fight.** In raids, a compact copy of the current slide appears on
 screen, about the size of your minimap. Drag it wherever you like. It shows the same slide the
@@ -86,6 +88,11 @@ Hover it out of combat to move it or close it, and `/raidplan mini` brings it ba
 **It looks like it belongs there.** Dark panels, one accent colour you can change, soft shadows,
 and icons on the drawing tools. The headings use the game's own font rather than a generic one.
 If you'd rather it matched your other plugins, one switch in settings turns the whole thing off.
+
+**Trace a plan you already have.** Got a strat as a screenshot — from a website, a Discord post, a
+photo of someone's whiteboard? Drop the picture behind the arena, draw your own slide on top of it,
+then fade it out. Much faster than rebuilding from memory, and it works with any source. The
+picture stays on your computer and isn't sent with the share code.
 
 **Share it with a code.** A finished plan turns into one long code. Copy it, paste it in Discord,
 everyone else pastes it back in. Nothing is uploaded anywhere and nobody needs an account.
@@ -139,6 +146,9 @@ to `/xlplugins` → Settings → Experimental and check the URL is there and spe
 
 **An update fails to install.** Restart the game and try again. If it still fails after a restart,
 open an issue and mention what version you're coming from.
+
+**FF Logs importing won't connect.** Open settings and look at the FF Logs section — it says
+whether the key works. "Forget them" clears both boxes so you can paste a fresh pair.
 
 **Calls aren't firing.** Check `/raidplan calls` is on, and that the step is actually anchored to a
 boss cast rather than set to Manual.

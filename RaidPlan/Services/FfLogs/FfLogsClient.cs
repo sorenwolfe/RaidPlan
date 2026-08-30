@@ -33,12 +33,20 @@ public sealed class FfLogsClient : IDisposable
     private string token = string.Empty;
     private DateTime tokenExpiresUtc = DateTime.MinValue;
 
+    /// <summary>
+    /// Which credentials the cached token belongs to. Without this a corrected id or secret goes
+    /// on using the token the old ones bought, until it expires an hour later.
+    /// </summary>
+    private string tokenFor = string.Empty;
+
     /// <summary>Last raw response, kept so a failed import can show what actually came back.</summary>
     public string LastResponse { get; private set; } = string.Empty;
 
     public async Task<string> GetTokenAsync(string clientId, string clientSecret, CancellationToken cancel = default)
     {
-        if (!string.IsNullOrEmpty(token) && DateTime.UtcNow < tokenExpiresUtc)
+        var fingerprint = Fingerprint(clientId, clientSecret);
+
+        if (!string.IsNullOrEmpty(token) && DateTime.UtcNow < tokenExpiresUtc && tokenFor == fingerprint)
             return token;
 
         if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
@@ -70,8 +78,22 @@ public sealed class FfLogsClient : IDisposable
 
         var seconds = json.Value<int?>("expires_in") ?? 3600;
         tokenExpiresUtc = DateTime.UtcNow.AddSeconds(Math.Max(60, seconds - 60));
+        tokenFor = fingerprint;
 
         return token;
+    }
+
+    /// <summary>Identifies a credential pair without keeping it around in a readable form.</summary>
+    public static string Fingerprint(string clientId, string clientSecret) =>
+        Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes((clientId ?? string.Empty) + "\u0000" + (clientSecret ?? string.Empty))));
+
+    /// <summary>Throws away any cached token, so the next call has to authenticate again.</summary>
+    public void ForgetToken()
+    {
+        token = string.Empty;
+        tokenExpiresUtc = DateTime.MinValue;
+        tokenFor = string.Empty;
     }
 
     private async Task<JObject> QueryAsync(string clientId, string clientSecret, string query, CancellationToken cancel)
