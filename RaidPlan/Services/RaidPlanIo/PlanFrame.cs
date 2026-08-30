@@ -91,19 +91,34 @@ public readonly struct PlanFrame
         return new PlanFrame(centre.X - (side * 0.5f), centre.Y - (side * 0.5f), side);
     }
 
-    /// <summary>How far the furthest of these points sits from the frame's middle, 0.5 being the edge.</summary>
-    public float Reach(IReadOnlyList<Vector2> points)
+    /// <summary>
+    /// How far out these points sit from the frame's middle, 0.5 being the edge.
+    /// </summary>
+    /// <remarks>
+    /// Takes a share of the points rather than all of them. Every plan has a couple of things
+    /// drawn well off the platform, and sizing to the furthest of them is what made busy plans
+    /// import small. At 1.0 this is the plain maximum.
+    /// </remarks>
+    public float Reach(IReadOnlyList<Vector2> points, float share = 1f)
     {
-        var centre = new Vector2(MinX + (Side * 0.5f), MinY + (Side * 0.5f));
-        var reach = 0f;
+        if (points.Count == 0)
+            return 0f;
 
-        foreach (var p in points)
+        var centre = new Vector2(MinX + (Side * 0.5f), MinY + (Side * 0.5f));
+        var offsets = new float[points.Count];
+
+        for (var i = 0; i < points.Count; i++)
         {
-            reach = MathF.Max(reach, MathF.Abs(p.X - centre.X));
-            reach = MathF.Max(reach, MathF.Abs(p.Y - centre.Y));
+            offsets[i] = MathF.Max(
+                MathF.Abs(points[i].X - centre.X),
+                MathF.Abs(points[i].Y - centre.Y));
         }
 
-        return reach / Side;
+        Array.Sort(offsets);
+
+        var index = (int)MathF.Ceiling(Math.Clamp(share, 0.5f, 1f) * points.Count) - 1;
+
+        return offsets[Math.Clamp(index, 0, points.Count - 1)] / Side;
     }
 
     /// <summary>The same frame widened by a factor, keeping its centre.</summary>

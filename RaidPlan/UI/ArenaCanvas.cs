@@ -34,8 +34,19 @@ public sealed class ArenaCanvas
     /// <summary>Past this many points a selected path gets an outline instead of per-point dots.</summary>
     public const int MaxPointHandles = 8;
 
+    public const float MinZoom = ArenaView.MinZoom;
+    public const float MaxZoom = ArenaView.MaxZoom;
+
+    /// <summary>
+    /// Top-left of the whole board in screen space, and its side. At zoom 1 this is the widget
+    /// itself; zoomed in it is bigger than the widget and slides around under it, which is what
+    /// lets every drawing call below stay in board coordinates and know nothing about zoom.
+    /// </summary>
     private Vector2 origin;
     private float side;
+
+    private ArenaView view = new();
+    private bool panning;
 
     private string? draggingId;
     private CanvasItem? drawingStroke;
@@ -64,6 +75,16 @@ public sealed class ArenaCanvas
 
     public string? SelectedId { get; private set; }
 
+    /// <summary>How far in the view is. 1 is the whole arena.</summary>
+    public float ViewZoom => view.Zoom;
+
+    public bool IsZoomedIn => view.IsZoomedIn;
+
+    /// <summary>Zooms about the middle of what is on screen, so the view does not jump.</summary>
+    public void SetViewZoom(float value) => view.SetZoom(value);
+
+    public void ResetView() => view.Reset();
+
     public CanvasItem? GetSelected(Slide slide) =>
         SelectedId == null ? null : slide.Items.FirstOrDefault(i => i.Id == SelectedId);
 
@@ -81,21 +102,30 @@ public sealed class ArenaCanvas
             return false;
         }
 
-        side = MathF.Min(available.X, available.Y);
-        var canvasSize = new Vector2(side, side);
+        var viewSide = MathF.Min(available.X, available.Y);
+        var canvasSize = new Vector2(viewSide, viewSide);
 
         // Centre the square inside whatever room we were given.
-        var pad = MathF.Max(0f, (available.X - side) * 0.5f);
+        var pad = MathF.Max(0f, (available.X - viewSide) * 0.5f);
         if (pad > 0)
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + pad);
 
-        origin = ImGui.GetCursorScreenPos();
+        var viewOrigin = ImGui.GetCursorScreenPos();
+
+        // The board is the widget scaled up by the zoom and shifted so the focus point sits in
+        // the middle. Everything below then draws in board coordinates as it always did.
+        if (!editable)
+            view.Reset();
+
+        side = view.BoardSide(viewSide);
+        origin = view.BoardOrigin(viewOrigin, viewSide);
+        var boardSize = new Vector2(side, side);
 
         var drawList = ImGui.GetWindowDrawList();
-        drawList.PushClipRect(origin, origin + canvasSize, true);
+        drawList.PushClipRect(viewOrigin, viewOrigin + canvasSize, true);
 
-        DrawBackdrop(drawList, slide, canvasSize);
-        DrawArenaBackground(drawList, plan.Arena, canvasSize);
+        DrawBackdrop(drawList, slide, boardSize);
+        DrawArenaBackground(drawList, plan.Arena, boardSize);
 
         foreach (var item in slide.Items.OrderBy(i => i.Layer).ThenBy(i => (int)i.Kind))
             DrawItem(drawList, plan, item);
@@ -104,8 +134,12 @@ public sealed class ArenaCanvas
 
         if (editable)
         {
-            ImGui.InvisibleButton(CanvasId, canvasSize, ImGuiButtonFlags.MouseButtonLeft | ImGuiButtonFlags.MouseButtonRight);
+            ImGui.InvisibleButton(CanvasId, canvasSize,
+                ImGuiButtonFlags.MouseButtonLeft | ImGuiButtonFlags.MouseButtonRight | ImGuiButtonFlags.MouseButtonMiddle);
             changed |= HandleInteraction(plan, slide);
+
+            // After the interaction, so a click and the thing it hit agree on where they are.
+            HandleView(viewSide);
         }
         else
         {
@@ -116,10 +150,55 @@ public sealed class ArenaCanvas
             ImGui.Dummy(canvasSize);
         }
 
-        // Outline last so it sits above everything, including the hit region.
-        drawList.AddRect(origin, origin + canvasSize, 0x40FFFFFF, 4f, ImDrawFlags.None, 1f);
+        // Outline last so it sits above everything, including the hit region. On the widget, not
+        // the board — zoomed in the board's own edge is off screen.
+        drawList.AddRect(viewOrigin, viewOrigin + canvasSize, 0x40FFFFFF, 4f, ImDrawFlags.None, 1f);
+
+        if (editable && IsZoomedIn)
+            DrawZoomHint(drawList, viewOrigin, canvasSize);
 
         return changed;
+    }
+
+    /// <summary>
+    /// The wheel zooms about the cursor, the middle button drags the board around. Left is busy
+    /// drawing and right opens the menu, so the middle button is the one left for panning.
+    /// </summary>
+    private void HandleView(float viewSide)
+    {
+        var hovered = ImGui.IsItemHovered();
+        var busy = drawingStroke != null || draggingId != null || hasPendingStart;
+
+        var wheel = ImGui.GetIO().MouseWheel;
+        if (hovered && !busy && wheel != 0f)
+            view.ZoomAbout(view.Zoom * MathF.Pow(1.25f, wheel), ToNormalised(ImGui.GetMousePos()));
+
+        if (hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Middle))
+            panning = true;
+
+        if (!panning)
+            return;
+
+        if (!ImGui.IsMouseDown(ImGuiMouseButton.Middle))
+        {
+            panning = false;
+            return;
+        }
+
+        view.Pan(ImGui.GetIO().MouseDelta, viewSide);
+    }
+
+    /// <summary>A small badge while zoomed, so nobody wonders why the arena is cropped.</summary>
+    private void DrawZoomHint(ImDrawListPtr drawList, Vector2 viewOrigin, Vector2 size)
+    {
+        var text = view.Zoom.ToString("0.#") + "x";
+        var pad = new Vector2(6f, 3f) * UiHelpers.Scale;
+        var extent = UiHelpers.TextSize(text);
+        var max = viewOrigin + new Vector2(size.X - (8f * UiHelpers.Scale), 8f * UiHelpers.Scale + extent.Y + (pad.Y * 2));
+        var min = max - extent - (pad * 2);
+
+        drawList.AddRectFilled(min, max, 0x99000000, 3f);
+        UiHelpers.CenteredShadowText(drawList, (min + max) * 0.5f, text, 0xCCFFFFFF);
     }
 
     // ---------------------------------------------------------------- coordinates

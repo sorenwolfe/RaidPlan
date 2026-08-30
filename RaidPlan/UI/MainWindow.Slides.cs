@@ -283,7 +283,7 @@ public sealed partial class MainWindow
         var counter = $"{slideIndex + 1} / {plan.Slides.Count}";
         var counterWidth = UiHelpers.TextSize(counter).X;
 
-        ImGui.SetNextItemWidth(-(counterWidth + (step * 2) + (gap * 3)));
+        ImGui.SetNextItemWidth(-(counterWidth + (step * 5) + (gap * 6)));
         var title = slide.Title;
         if (UiHelpers.InputTextHint("##slide-title", "Slide title", ref title, 128))
         {
@@ -296,6 +296,35 @@ public sealed partial class MainWindow
         ImGui.TextDisabled(counter);
 
         var square = new Vector2(step, step);
+
+        ImGui.SameLine();
+        ImGui.BeginDisabled(canvas.ViewZoom <= ArenaCanvas.MinZoom + 0.001f);
+        if (ArrowButton(Dalamud.Interface.FontAwesomeIcon.SearchMinus, "zoom-out", square, "-"))
+            canvas.SetViewZoom(canvas.ViewZoom / 1.5f);
+        ImGui.EndDisabled();
+
+        if (ImGui.IsItemHovered())
+            UiHelpers.Tooltip("Zoom out. The mouse wheel over the arena does the same.");
+
+        ImGui.SameLine();
+        ImGui.BeginDisabled(canvas.ViewZoom >= ArenaCanvas.MaxZoom - 0.001f);
+        if (ArrowButton(Dalamud.Interface.FontAwesomeIcon.SearchPlus, "zoom-in", square, "+"))
+            canvas.SetViewZoom(canvas.ViewZoom * 1.5f);
+        ImGui.EndDisabled();
+
+        if (ImGui.IsItemHovered())
+            UiHelpers.Tooltip(
+                "Zoom in for close work. Wheel over the arena to zoom where the cursor is, and " +
+                "hold the middle mouse button to drag the view around.");
+
+        ImGui.SameLine();
+        ImGui.BeginDisabled(!canvas.IsZoomedIn);
+        if (ArrowButton(Dalamud.Interface.FontAwesomeIcon.Expand, "zoom-reset", square, "="))
+            canvas.ResetView();
+        ImGui.EndDisabled();
+
+        if (ImGui.IsItemHovered())
+            UiHelpers.Tooltip("Back to the whole arena.");
 
         ImGui.SameLine();
         ImGui.BeginDisabled(slideIndex <= 0);

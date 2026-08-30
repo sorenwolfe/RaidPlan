@@ -81,16 +81,34 @@ public static class RaidPlanIoImporter
     public const float ArenaEdge = 0.47f;
 
     /// <summary>
+    /// How much of the source canvas's half-height the platform itself actually covers.
+    /// </summary>
+    /// <remarks>
+    /// Their arena art is a square the height of the canvas with the platform drawn inside a
+    /// margin, so the platform is meaningfully smaller than the canvas. Measured off a rendered
+    /// plan: a platform of radius 297px on a canvas 714px tall, which is 0.83. Treating the
+    /// canvas half-height as the radius — which is what this used to do — makes the frame a fifth
+    /// too big and everything on it a fifth too small.
+    /// </remarks>
+    public const float ArenaFraction = 0.83f;
+
+    /// <summary>
     /// How far the frame may be widened past the arena to keep stray objects on the board.
     /// </summary>
     /// <remarks>
-    /// Room for a mechanic that overhangs the platform by half its radius, and no more. Past that
-    /// the choice is between an arena drawn too small to read and a handful of objects hanging
-    /// over the edge, and the arena wins — it is the thing everyone is looking at. Objects that
-    /// end up outside are still drawn; they are just outside the outline, which is where the
-    /// original plan had them anyway.
+    /// Deliberately small. Widening is what was shrinking these plans: one wide mechanic drawn
+    /// off the platform — and most fights have one — pushed the frame out to its old 1.6 limit
+    /// and took the whole plan down with it. Objects outside the arena are still drawn, just
+    /// outside the outline, which is where the original plan had them; an arena too small to read
+    /// is the worse outcome. What little widening is left is measured against the bulk of the
+    /// plan rather than its furthest object, so one stray shape cannot trigger it at all.
     /// </remarks>
-    public const float MaxWidening = 1.60f;
+    public const float MaxWidening = 1.12f;
+
+    /// <summary>
+    /// Share of the plan's objects the frame is sized to hold. The rest may hang over the edge.
+    /// </summary>
+    public const float ReachPercentile = 0.98f;
 
     /// <summary>Types that describe the board rather than sit on it, so they never size the frame.</summary>
     private static readonly HashSet<string> NotOnTheBoard =
@@ -210,10 +228,10 @@ public static class RaidPlanIoImporter
         if (!TryWaymarkCentre(parsed, out var centre) || centre.Y <= 1f)
             return PlanFrame.Fit(onBoard, Padding);
 
-        var frame = PlanFrame.FromArena(centre, centre.Y, ArenaEdge);
+        var frame = PlanFrame.FromArena(centre, centre.Y * ArenaFraction, ArenaEdge);
 
-        // Widen only if something would otherwise fall off the board, and only so far.
-        var reach = frame.Reach(onBoard);
+        // Widen only if the bulk of the plan would otherwise fall off the board, and only so far.
+        var reach = frame.Reach(onBoard, ReachPercentile);
         if (reach <= 0.5f)
             return frame;
 

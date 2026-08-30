@@ -47,6 +47,10 @@ player tokens, waymarks, boss markers, AoE shapes (circles, donuts, cones, lines
 text and freehand drawing. Pick the arena shape to match the real one. Players show up with their
 job icon, so a board reads at a glance. Hover any tool to see what it does.
 
+**Zoom in for the fiddly bits.** Roll the mouse wheel over the arena to zoom in where the cursor
+is, or use the magnifier buttons at the top. Hold the middle mouse button to drag the view around.
+The button next to them puts the whole arena back.
+
 **Everyone gets their own instructions.** You build the plan around *positions* — MT, H2, R1 —
 not names. Give each position a job, and RaidPlan shows you that job's real spell list to pick
 from. So you can say "H2 presses Bell here", and the person playing H2 that night is the one who
@@ -157,7 +161,7 @@ open an issue and mention what version you're coming from.
 
 **An imported plan looks too big or too small.** The scale is taken from the plan's waymarks,
 which is reliable as long as all eight are placed. If a plan doesn't use them, it falls back to
-guessing from the drawing. Change the arena shape and size on the Slides tab and it'll settle.
+guessing from the drawing, and that can come out small.
 
 **FF Logs importing won't connect.** Open settings and look at the FF Logs section — it says
 whether the key works. "Forget them" clears both boxes so you can paste a fresh pair.
