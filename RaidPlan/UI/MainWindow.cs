@@ -6,6 +6,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using RaidPlan.Model;
 using RaidPlan.Services;
+using RaidPlan.UI.Theme;
 
 namespace RaidPlan.UI;
 
@@ -45,6 +46,12 @@ public sealed partial class MainWindow : Window, IDisposable
         Size = new Vector2(1100, 720);
         SizeCondition = ImGuiCond.FirstUseEver;
     }
+
+    private ThemeScope theme;
+
+    public override void PreDraw() => theme = ThemeScope.Push();
+
+    public override void PostDraw() => theme.Dispose();
 
     private RaidPlanDocument? Plan => Plugin.Plans.Active;
 
@@ -172,6 +179,14 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
+        // Sits on the background list so it lands under the window's own fill.
+        if (Plugin.Config.ThemeEnabled && Plugin.Config.ThemeShadows)
+        {
+            var pos = ImGui.GetWindowPos();
+            Sprites.Shadow(ImGui.GetBackgroundDrawList(), pos, pos + ImGui.GetWindowSize(),
+                18f * UiHelpers.Scale, 0.45f);
+        }
+
         var plan = Plan;
         if (plan == null)
         {

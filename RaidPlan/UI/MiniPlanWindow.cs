@@ -5,6 +5,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using RaidPlan.Model;
 using RaidPlan.Services;
+using RaidPlan.UI.Theme;
 
 namespace RaidPlan.UI;
 
@@ -32,6 +33,7 @@ public sealed class MiniPlanWindow : Window, IDisposable
 
     private bool ignoringMouse = true;
     private bool anchorPendingSave;
+    private ThemeScope theme;
 
     public MiniPlanWindow()
         : base("##raidplan-mini", BaseFlags)
@@ -110,12 +112,15 @@ public sealed class MiniPlanWindow : Window, IDisposable
             ImGui.SetNextWindowPos(position, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
         }
 
+        // Theme first, then the padding, so the pops below unwind in the reverse order.
+        theme = ThemeScope.Push();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
     }
 
     public override void PostDraw()
     {
         ImGui.PopStyleVar();
+        theme.Dispose();
 
         if (ignoringMouse)
             return;
@@ -162,8 +167,11 @@ public sealed class MiniPlanWindow : Window, IDisposable
         var alpha = Math.Clamp(Plugin.Config.MiniPlanOpacity, 0.1f, 1f);
         var rounding = 8f * UiHelpers.Scale;
 
-        drawList.AddRectFilled(min, max, UiHelpers.WithAlpha(0xFF0B0D11, alpha), rounding);
-        drawList.AddRect(min, max, UiHelpers.WithAlpha(0xFFFFFFFF, 0.14f), rounding, ImDrawFlags.None, 1f);
+        if (Plugin.Config.ThemeShadows)
+            Sprites.Shadow(drawList, min, max, 14f * UiHelpers.Scale, 0.55f * alpha);
+
+        drawList.AddRectFilled(min, max, Palette.Pack(Palette.Window, alpha), rounding);
+        drawList.AddRect(min, max, Palette.Line(0.14f), rounding, ImDrawFlags.None, 1f);
     }
 
     /// <summary>

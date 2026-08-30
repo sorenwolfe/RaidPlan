@@ -83,6 +83,10 @@ found by your character name, or by your job when it only appears once in the pl
 in combat it ignores the mouse completely, so it can never swallow a click meant for the game.
 Hover it out of combat to move it or close it, and `/raidplan mini` brings it back.
 
+**It looks like it belongs there.** Dark panels, one accent colour you can change, soft shadows,
+and icons on the drawing tools. The headings use the game's own font rather than a generic one.
+If you'd rather it matched your other plugins, one switch in settings turns the whole thing off.
+
 **Share it with a code.** A finished plan turns into one long code. Copy it, paste it in Discord,
 everyone else pastes it back in. Nothing is uploaded anywhere and nobody needs an account.
 

@@ -5,6 +5,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using RaidPlan.Model;
 using RaidPlan.Services;
+using RaidPlan.UI.Theme;
 
 namespace RaidPlan.UI;
 
@@ -27,6 +28,12 @@ public sealed class ConfigWindow : Window, IDisposable
         SizeCondition = ImGuiCond.FirstUseEver;
     }
 
+    private ThemeScope theme;
+
+    public override void PreDraw() => theme = ThemeScope.Push();
+
+    public override void PostDraw() => theme.Dispose();
+
     public override void PreOpenCheck()
     {
         if (!RequestOpen)
@@ -38,6 +45,14 @@ public sealed class ConfigWindow : Window, IDisposable
 
     public override void Draw()
     {
+        // Sits on the background list so it lands under the window's own fill.
+        if (Plugin.Config.ThemeEnabled && Plugin.Config.ThemeShadows)
+        {
+            var pos = ImGui.GetWindowPos();
+            Sprites.Shadow(ImGui.GetBackgroundDrawList(), pos, pos + ImGui.GetWindowSize(),
+                18f * UiHelpers.Scale, 0.45f);
+        }
+
         var config = Plugin.Config;
         var team = config.GetActiveTeam();
 
@@ -283,6 +298,70 @@ public sealed class ConfigWindow : Window, IDisposable
         }
 
         ImGui.Spacing();
+        ImGui.TextDisabled("Look");
+        ImGui.Separator();
+
+        var themed = config.ThemeEnabled;
+        if (ImGui.Checkbox("RaidPlan's own dark theme", ref themed))
+        {
+            config.ThemeEnabled = themed;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Off puts the windows back to whatever style Dalamud is using, which is the right " +
+            "choice if you already theme your plugins to match.");
+
+        if (config.ThemeEnabled)
+        {
+            var accent = Palette.Vec(Palette.Accent);
+            if (ImGui.ColorEdit4("Accent", ref accent, ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoAlpha))
+            {
+                config.ThemeAccent =
+                    ((uint)(Math.Clamp(accent.X, 0f, 1f) * 255f) << 16) |
+                    ((uint)(Math.Clamp(accent.Y, 0f, 1f) * 255f) << 8) |
+                    (uint)(Math.Clamp(accent.Z, 0f, 1f) * 255f);
+                Plugin.SaveConfig();
+            }
+
+            ImGui.SameLine();
+            foreach (var (presetName, value) in ThemePresets)
+            {
+                if (ImGui.Button(presetName, Vector2.Zero))
+                {
+                    config.ThemeAccent = value;
+                    Plugin.SaveConfig();
+                }
+
+                ImGui.SameLine();
+            }
+
+            if (ImGui.Button("Reset", Vector2.Zero))
+            {
+                config.ThemeAccent = 0;
+                Plugin.SaveConfig();
+            }
+
+            var shadows = config.ThemeShadows;
+            if (ImGui.Checkbox("Drop shadow behind the windows", ref shadows))
+            {
+                config.ThemeShadows = shadows;
+                Plugin.SaveConfig();
+            }
+
+            var toolIcons = config.ThemeToolIcons;
+            if (ImGui.Checkbox("Icons on the drawing tools", ref toolIcons))
+            {
+                config.ThemeToolIcons = toolIcons;
+                Plugin.SaveConfig();
+            }
+
+            ImGui.SameLine();
+            UiHelpers.HelpMarker("Off goes back to the written tool names. The tooltips are the same either way.");
+        }
+
+        ImGui.Spacing();
         ImGui.TextDisabled("Mini plan");
         ImGui.Separator();
 
@@ -394,6 +473,13 @@ public sealed class ConfigWindow : Window, IDisposable
             ? "Action list loaded."
             : "Still reading the game's action list…");
     }
+
+    private static readonly (string Name, uint Value)[] ThemePresets =
+    {
+        ("Indigo", Palette.DefaultAccent),
+        ("Teal", Palette.Good),
+        ("Amber", Palette.Attention),
+    };
 
     private static void DrawChannelToggle(TeamProfile team, ReminderChannel channel, string label)
     {

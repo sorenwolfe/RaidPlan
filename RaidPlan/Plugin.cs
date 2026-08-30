@@ -8,6 +8,7 @@ using Dalamud.Plugin.Services;
 using RaidPlan.Services;
 using RaidPlan.Services.FfLogs;
 using RaidPlan.UI;
+using RaidPlan.UI.Theme;
 
 namespace RaidPlan;
 
@@ -39,6 +40,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static EncounterLearner Learner { get; private set; } = null!;
     internal static SlideDirector Director { get; private set; } = null!;
     internal static FfLogsClient FfLogs { get; private set; } = null!;
+    internal static ThemeFonts Fonts { get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("RaidPlan");
 
@@ -81,6 +83,7 @@ public sealed class Plugin : IDalamudPlugin
         Reminders = new ReminderEngine();
         Director = new SlideDirector();
         FfLogs = new FfLogsClient();
+        Fonts = new ThemeFonts();
 
         mainWindow = new MainWindow();
         Main = mainWindow;
@@ -253,6 +256,8 @@ public sealed class Plugin : IDalamudPlugin
         Safely(Learner.Dispose, "shut down the learner");
         Safely(Encounter.Dispose, "shut down the encounter monitor");
         Safely(FfLogs.Dispose, "close the FF Logs client");
+        Safely(Fonts.Dispose, "release the font handles");
+        Safely(Sprites.Forget, "drop the sprite handles");
 
         Safely(WindowSystem.RemoveAllWindows, "remove the windows");
         Safely(mainWindow.Dispose, "dispose the planner window");

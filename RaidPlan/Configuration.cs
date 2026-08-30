@@ -142,6 +142,20 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>Print every detected boss cast to the log window, for building timelines.</summary>
     public bool LogDetectedCasts { get; set; }
 
+    // ---------------------------------------------------------------- theme
+
+    /// <summary>The dark glass look. Off falls back to whatever Dalamud's style is.</summary>
+    public bool ThemeEnabled { get; set; } = true;
+
+    /// <summary>Accent colour as 0xRRGGBB. Zero means the default indigo.</summary>
+    public uint ThemeAccent { get; set; }
+
+    /// <summary>Soft shadow behind the plugin's windows.</summary>
+    public bool ThemeShadows { get; set; } = true;
+
+    /// <summary>Icons on the drawing tools instead of text labels.</summary>
+    public bool ThemeToolIcons { get; set; } = true;
+
     // ---------------------------------------------------------------- mini plan
 
     /// <summary>When the compact in-fight window appears by itself.</summary>

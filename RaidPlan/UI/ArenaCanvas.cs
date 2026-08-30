@@ -314,7 +314,12 @@ public sealed class ArenaCanvas
     {
         var pulse = 0.5f + (0.5f * MathF.Sin((float)ImGui.GetTime() * 2.2f));
 
-        drawList.AddCircleFilled(centre, radius * 1.62f, UiHelpers.WithAlpha(colour, 0.10f + (0.06f * pulse)), 40);
+        // The sprite gives a real falloff. Without it, fall back to a flat disc, which is the
+        // best a draw list can manage on its own.
+        var halo = UiHelpers.WithAlpha(colour, 0.30f + (0.12f * pulse));
+        if (!Theme.Sprites.Glow(drawList, centre, radius * 2.6f, halo))
+            drawList.AddCircleFilled(centre, radius * 1.62f, UiHelpers.WithAlpha(colour, 0.10f + (0.06f * pulse)), 40);
+
         drawList.AddCircle(centre, radius * (1.34f + (0.07f * pulse)), UiHelpers.WithAlpha(0xFFFFFFFF, 0.45f + (0.35f * pulse)), 40, 2f);
     }
 

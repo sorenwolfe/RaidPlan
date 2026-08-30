@@ -4,6 +4,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using RaidPlan.Model;
 using RaidPlan.Services;
+using RaidPlan.UI.Theme;
 
 namespace RaidPlan.UI;
 
@@ -214,25 +215,38 @@ public sealed partial class MainWindow
 
     private void DrawToolbar(RaidPlanDocument plan)
     {
+        var useIcons = Plugin.Config.ThemeToolIcons;
+        var square = new Vector2(ImGui.GetFrameHeight(), ImGui.GetFrameHeight());
+
         for (var i = 0; i < ToolCatalog.All.Count; i++)
         {
-            var (tool, label, tip) = ToolCatalog.All[i];
+            var entry = ToolCatalog.All[i];
 
             if (i > 0)
-                UiHelpers.SameLineIfRoom(UiHelpers.ButtonWidth(label));
+                UiHelpers.SameLineIfRoom(useIcons ? square.X : UiHelpers.ButtonWidth(entry.Label));
 
-            var isActive = canvas.Tool == tool;
+            var isActive = canvas.Tool == entry.Tool;
             if (isActive)
-                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.26f, 0.45f, 0.72f, 1f));
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, Palette.Vec(Palette.Accent, 0.26f));
+                ImGui.PushStyleColor(ImGuiCol.Border, Palette.Vec(Palette.Accent, 0.9f));
+            }
 
-            if (ImGui.Button(label, Vector2.Zero))
-                canvas.Tool = tool;
+            var pressed = false;
+            var drewIcon = useIcons && ThemeFonts.TryIconButton(entry.Icon, "tool" + i, square, out pressed);
+
+            // No icon font, or the player asked for words: a plain labelled button.
+            if (!drewIcon)
+                pressed = ImGui.Button(entry.Label + "##tool" + i, Vector2.Zero);
+
+            if (pressed)
+                canvas.Tool = entry.Tool;
 
             if (isActive)
-                ImGui.PopStyleColor();
+                ImGui.PopStyleColor(2);
 
             if (ImGui.IsItemHovered())
-                UiHelpers.Tooltip(label, tip);
+                UiHelpers.Tooltip(entry.Label, entry.Tip);
         }
 
         // Contextual options for the selected tool.
