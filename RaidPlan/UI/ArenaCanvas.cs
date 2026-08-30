@@ -31,6 +31,9 @@ public sealed class ArenaCanvas
 {
     private const string CanvasId = "##raidplan-arena";
 
+    /// <summary>Past this many points a selected path gets an outline instead of per-point dots.</summary>
+    public const int MaxPointHandles = 8;
+
     private Vector2 origin;
     private float side;
 
@@ -511,9 +514,29 @@ public sealed class ArenaCanvas
     private void DrawSelectionHint(ImDrawListPtr drawList, CanvasItem item, Vector2 centre)
     {
         var r = Len(MathF.Max(item.Radius, 0.03f)) + 5f;
+
         if (item.Kind is CanvasItemKind.Arrow or CanvasItemKind.Tether or CanvasItemKind.Freehand && item.Points.Count > 0)
         {
-            foreach (var p in item.Points.Select(ToScreen))
+            var screen = item.Points.Select(ToScreen).ToArray();
+
+            // A handle per point works for a two-ended tether. A pen stroke has dozens, and
+            // beading every one of them buries the line you actually drew.
+            if (screen.Length > MaxPointHandles)
+            {
+                var min = screen[0];
+                var max = screen[0];
+                foreach (var p in screen)
+                {
+                    min = Vector2.Min(min, p);
+                    max = Vector2.Max(max, p);
+                }
+
+                var pad = new Vector2(5f, 5f);
+                drawList.AddRect(min - pad, max + pad, 0x90FFFFFF, 3f, ImDrawFlags.None, 1.5f);
+                return;
+            }
+
+            foreach (var p in screen)
                 drawList.AddCircle(p, 4f, 0xFFFFFFFF, 12, 1.5f);
             return;
         }

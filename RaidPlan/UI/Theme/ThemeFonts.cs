@@ -15,6 +15,7 @@ public sealed class ThemeFonts : IDisposable
 {
     private IFontHandle? heading;
     private IFontHandle? headingLarge;
+    private IFontHandle? mixed;
 
     public ThemeFonts()
     {
@@ -23,6 +24,7 @@ public sealed class ThemeFonts : IDisposable
             var atlas = Plugin.PluginInterface.UiBuilder.FontAtlas;
             heading = atlas.NewGameFontHandle(new GameFontStyle(GameFontFamilyAndSize.TrumpGothic184));
             headingLarge = atlas.NewGameFontHandle(new GameFontStyle(GameFontFamilyAndSize.TrumpGothic23));
+            mixed = BuildMixed(atlas);
         }
         catch (Exception ex)
         {
@@ -30,8 +32,42 @@ public sealed class ThemeFonts : IDisposable
             Plugin.Log.Warning(ex, "RaidPlan could not build its font handles; falling back to the default font.");
             heading = null;
             headingLarge = null;
+            mixed = null;
         }
     }
+
+    /// <summary>
+    /// The normal text font with FontAwesome merged into it, so one label can carry an icon and
+    /// words. Without the merge the icon is a glyph the text font has never heard of, and it
+    /// renders as an empty box.
+    /// </summary>
+    private static IFontHandle? BuildMixed(IFontAtlas atlas)
+    {
+        try
+        {
+            // Built from the player's own default font spec rather than a hardcoded one, so
+            // whatever font they picked in Dalamud's settings is what the labels use.
+            var spec = Plugin.PluginInterface.UiBuilder.DefaultFontSpec;
+
+            return spec.CreateFontHandle(atlas, e => e.OnPreBuild(toolkit =>
+                toolkit.AddFontAwesomeIconFont(new SafeFontConfig
+                {
+                    SizePx = spec.SizePx,
+                    MergeFont = toolkit.Font,
+                })));
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "RaidPlan could not merge the icon font; tabs will be text only.");
+            return null;
+        }
+    }
+
+    /// <summary>Whether a label may safely contain both an icon and text.</summary>
+    public bool MixedAvailable => Plugin.Config.ThemeToolIcons && mixed is { Available: true };
+
+    /// <summary>Pushes the merged font. Only call it when <see cref="MixedAvailable"/> is true.</summary>
+    public IDisposable? PushMixed() => MixedAvailable ? mixed!.Push() : null;
 
     private static bool Usable(IFontHandle? handle) =>
         handle is { Available: true } && Plugin.Config.ThemeEnabled;
@@ -41,10 +77,19 @@ public sealed class ThemeFonts : IDisposable
 
     public IDisposable? PushTitle() => Usable(headingLarge) ? headingLarge!.Push() : null;
 
-    /// <summary>Dalamud's bundled FontAwesome, for icons on buttons.</summary>
+    /// <summary>
+    /// Dalamud's bundled FontAwesome. The fixed-width variant, because the proportional one gives
+    /// every glyph its own advance width, and a square button then centres each icon differently
+    /// from its neighbours.
+    /// </summary>
     public static IDisposable? PushIcons()
     {
-        var handle = Plugin.PluginInterface.UiBuilder.IconFontHandle;
+        var builder = Plugin.PluginInterface.UiBuilder;
+        var handle = builder.IconFontFixedWidthHandle;
+
+        if (handle is not { Available: true })
+            handle = builder.IconFontHandle;
+
         return handle is { Available: true } ? handle.Push() : null;
     }
 
@@ -76,6 +121,9 @@ public sealed class ThemeFonts : IDisposable
         return true;
     }
 
+    /// <summary>The glyph for an icon, as a string.</summary>
+    public static string Glyph(FontAwesomeIcon icon) => FontAwesomeExtensions.ToIconString(icon);
+
     /// <summary>Draws one FontAwesome glyph as text.</summary>
     public static void Icon(FontAwesomeIconGlyph glyph)
     {
@@ -90,8 +138,10 @@ public sealed class ThemeFonts : IDisposable
     {
         heading?.Dispose();
         headingLarge?.Dispose();
+        mixed?.Dispose();
         heading = null;
         headingLarge = null;
+        mixed = null;
     }
 }
 

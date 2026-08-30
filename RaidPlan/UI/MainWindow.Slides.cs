@@ -183,15 +183,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        ImGui.SetNextItemWidth(-1);
-        var title = slide.Title;
-        if (UiHelpers.InputTextHint("##slide-title", "Slide title", ref title, 128))
-        {
-            slide.Title = title;
-            MarkDirty();
-        }
-
-        DrawToolbar(plan);
+        DrawSlideHeader(plan, slide);
 
         ImGui.Spacing();
 
@@ -211,6 +203,56 @@ public sealed partial class MainWindow
             slide.Notes = notes;
             MarkDirty();
         }
+    }
+
+    /// <summary>Slide title, where you are in the plan, and the two arrows for stepping through it.</summary>
+    private void DrawSlideHeader(RaidPlanDocument plan, Slide slide)
+    {
+        var step = ImGui.GetFrameHeight();
+        var gap = ImGui.GetStyle().ItemSpacing.X;
+        var counter = $"{slideIndex + 1} / {plan.Slides.Count}";
+        var counterWidth = UiHelpers.TextSize(counter).X;
+
+        ImGui.SetNextItemWidth(-(counterWidth + (step * 2) + (gap * 3)));
+        var title = slide.Title;
+        if (UiHelpers.InputTextHint("##slide-title", "Slide title", ref title, 128))
+        {
+            slide.Title = title;
+            MarkDirty();
+        }
+
+        ImGui.SameLine();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextDisabled(counter);
+
+        var square = new Vector2(step, step);
+
+        ImGui.SameLine();
+        ImGui.BeginDisabled(slideIndex <= 0);
+        if (ArrowButton(Dalamud.Interface.FontAwesomeIcon.ChevronLeft, "slide-prev", square, "<"))
+            SelectSlideManually(slideIndex - 1);
+        ImGui.EndDisabled();
+
+        if (ImGui.IsItemHovered())
+            UiHelpers.Tooltip("Previous slide. /raidplan prev does the same from a macro.");
+
+        ImGui.SameLine();
+        ImGui.BeginDisabled(slideIndex >= plan.Slides.Count - 1);
+        if (ArrowButton(Dalamud.Interface.FontAwesomeIcon.ChevronRight, "slide-next", square, ">"))
+            SelectSlideManually(slideIndex + 1);
+        ImGui.EndDisabled();
+
+        if (ImGui.IsItemHovered())
+            UiHelpers.Tooltip("Next slide. /raidplan next does the same from a macro.");
+    }
+
+    /// <summary>An icon button that falls back to a plain character when the icon font is absent.</summary>
+    private static bool ArrowButton(Dalamud.Interface.FontAwesomeIcon icon, string id, Vector2 size, string fallback)
+    {
+        if (Plugin.Config.ThemeToolIcons && ThemeFonts.TryIconButton(icon, id, size, out var pressed))
+            return pressed;
+
+        return ImGui.Button(fallback + "##" + id, size);
     }
 
     private void DrawToolbar(RaidPlanDocument plan)
@@ -340,6 +382,13 @@ public sealed partial class MainWindow
         var slide = CurrentSlide;
         if (slide == null)
             return;
+
+        ImGui.TextDisabled("Tool");
+        ImGui.Separator();
+        DrawToolbar(plan);
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
 
         var item = canvas.GetSelected(slide);
         if (item == null)

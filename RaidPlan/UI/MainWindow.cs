@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using RaidPlan.Model;
 using RaidPlan.Services;
@@ -202,49 +203,76 @@ public sealed partial class MainWindow : Window, IDisposable
         if (!ImGui.BeginTabBar("##raidplan-tabs", ImGuiTabBarFlags.None))
             return;
 
-        if (ImGui.BeginTabItem("Slides", ImGuiTabItemFlags.None))
+        if (Tab(FontAwesomeIcon.ChalkboardTeacher, "Slides"))
         {
             DrawSlidesTab(plan);
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("Timeline", ImGuiTabItemFlags.None))
+        if (Tab(FontAwesomeIcon.Stream, "Timeline"))
         {
             DrawTimelineTab(plan);
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("Roster", ImGuiTabItemFlags.None))
+        if (Tab(FontAwesomeIcon.Users, "Roster"))
         {
             DrawRosterTab(plan);
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("Share", ImGuiTabItemFlags.None))
+        if (Tab(FontAwesomeIcon.ShareAlt, "Share"))
         {
             DrawShareTab(plan);
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("Live", ImGuiTabItemFlags.None))
+        if (Tab(FontAwesomeIcon.Bolt, "Live"))
         {
             DrawLiveTab(plan);
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("Import", ImGuiTabItemFlags.None))
+        if (Tab(FontAwesomeIcon.FileImport, "Import"))
         {
             DrawImportTab(plan);
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("Learned", ImGuiTabItemFlags.None))
+        if (Tab(FontAwesomeIcon.ChartLine, "Learned"))
         {
             DrawLearnedTab(plan);
             ImGui.EndTabItem();
         }
 
         ImGui.EndTabBar();
+    }
+
+    /// <summary>
+    /// A tab with its icon in front of the label. The icon and the label are separate glyph runs
+    /// because they come from different fonts, so they are drawn as one string only when the icon
+    /// font is actually there — otherwise the label would be prefixed with a stray box.
+    /// </summary>
+    private static bool Tab(FontAwesomeIcon icon, string label)
+    {
+        if (!Plugin.Config.ThemeToolIcons)
+            return ImGui.BeginTabItem(label, ImGuiTabItemFlags.None);
+
+        if (!Plugin.Fonts.MixedAvailable)
+            return ImGui.BeginTabItem(label, ImGuiTabItemFlags.None);
+
+        // The id stays put whichever way the tab is drawn, so switching the setting doesn't
+        // reset which tab is open.
+        var pushed = Plugin.Fonts.PushMixed();
+        try
+        {
+            return ImGui.BeginTabItem(
+                $"{ThemeFonts.Glyph(icon)}  {label}###tab-{label}", ImGuiTabItemFlags.None);
+        }
+        finally
+        {
+            pushed?.Dispose();
+        }
     }
 
     // ---------------------------------------------------------------- header
