@@ -173,6 +173,12 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>Ring the token belonging to this client's seat.</summary>
     public bool MiniPlanHighlightMe { get; set; } = true;
 
+    /// <summary>Show the slide's notes under the arena in the mini window.</summary>
+    public bool MiniPlanShowNotes { get; set; } = true;
+
+    /// <summary>How many lines of notes the mini window will show before it stops growing.</summary>
+    public int MiniPlanNoteLines { get; set; } = 4;
+
     /// <summary>Keep it draggable during a pull. Off by default so it can't eat a click.</summary>
     public bool MiniPlanUnlocked { get; set; }
 

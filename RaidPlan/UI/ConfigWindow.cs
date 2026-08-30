@@ -420,6 +420,29 @@ public sealed class ConfigWindow : Window, IDisposable
             "Finds your seat on the board by your character name, or by your job when it only " +
             "appears once in the roster. Pin a seat on the Roster tab if it picks wrong.");
 
+        var showNotes = config.MiniPlanShowNotes;
+        if (ImGui.Checkbox("Show the slide's notes underneath", ref showNotes))
+        {
+            config.MiniPlanShowNotes = showNotes;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Whatever is written on the slide appears under the arena. The window grows to fit, " +
+            "up to the line limit below.");
+
+        if (config.MiniPlanShowNotes)
+        {
+            var noteLines = config.MiniPlanNoteLines;
+            ImGui.SetNextItemWidth(160f * UiHelpers.Scale);
+            if (ImGui.SliderInt("Lines of notes", ref noteLines, 1, 12, "%d", ImGuiSliderFlags.None))
+            {
+                config.MiniPlanNoteLines = noteLines;
+                Plugin.SaveConfig();
+            }
+        }
+
         var miniUnlocked = config.MiniPlanUnlocked;
         if (ImGui.Checkbox("Keep it draggable during a pull", ref miniUnlocked))
         {

@@ -81,7 +81,9 @@ it later in settings.
 **A small window for during the fight.** In raids, a compact copy of the current slide appears on
 screen, about the size of your minimap. Drag it wherever you like. It shows the same slide the
 planner is on, so it keeps up with the fight by itself, and it puts a ring around *your* marker —
-found by your character name, or by your job when it only appears once in the plan. While you're
+found by your character name, or by your job when it only appears once in the plan. Whatever's
+written on the slide shows underneath it, so you can read the call without opening the planner.
+While you're
 in combat it ignores the mouse completely, so it can never swallow a click meant for the game.
 Hover it out of combat to move it or close it, and `/raidplan mini` brings it back.
 
@@ -90,9 +92,10 @@ and icons on the drawing tools. The headings use the game's own font rather than
 If you'd rather it matched your other plugins, one switch in settings turns the whole thing off.
 
 **Bring in a plan from raidplan.io.** Paste a link and RaidPlan rebuilds it: every slide, the
-party tokens on the right seats, waymarks, AoE shapes, arrows and text. If the notes hold a fight
-timeline it reads that too, so the steps and slide names come across as well. It comes in as a new
-plan, so nothing you already have is touched.
+party tokens on the right seats with the roles they were drawn as, waymarks, AoE shapes and
+arrows. Text boxes become the slide's notes. If the notes hold a fight timeline it reads that too,
+so the steps and slide names come across as well. It comes in as a new plan, so nothing you
+already have is touched.
 
 **Trace a plan you already have.** Got a strat as a screenshot — from a website, a Discord post, a
 photo of someone's whiteboard? Drop the picture behind the arena, draw your own slide on top of it,
@@ -152,9 +155,9 @@ to `/xlplugins` → Settings → Experimental and check the URL is there and spe
 **An update fails to install.** Restart the game and try again. If it still fails after a restart,
 open an issue and mention what version you're coming from.
 
-**An imported plan looks too big or too small.** The file doesn't say how large the original arena
-was, so the scale is worked out from the plan's own contents. Change the arena shape and size on
-the Slides tab and it'll settle.
+**An imported plan looks too big or too small.** The scale is taken from the plan's waymarks,
+which is reliable as long as all eight are placed. If a plan doesn't use them, it falls back to
+guessing from the drawing. Change the arena shape and size on the Slides tab and it'll settle.
 
 **FF Logs importing won't connect.** Open settings and look at the FF Logs section — it says
 whether the key works. "Forget them" clears both boxes so you can paste a fresh pair.

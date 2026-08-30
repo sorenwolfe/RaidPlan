@@ -72,6 +72,49 @@ public readonly struct PlanFrame
         return new PlanFrame(centre.X - (side * 0.5f), centre.Y - (side * 0.5f), side);
     }
 
+    /// <summary>
+    /// Sizes the frame from the source arena itself rather than from whatever is drawn on it.
+    /// </summary>
+    /// <remarks>
+    /// This is the difference between a plan that imports at the right size and one that shrinks
+    /// because somebody drew a wide mechanic on step 30. Fitting the contents makes the scale
+    /// depend on the busiest slide in the plan; fitting the arena makes two plans of the same
+    /// fight come in at the same size, which is what anyone comparing them expects.
+    /// </remarks>
+    /// <param name="centre">Middle of the source arena.</param>
+    /// <param name="arenaRadius">Its radius, in source pixels.</param>
+    /// <param name="edge">Where our own arena outline sits, as a fraction of the square.</param>
+    public static PlanFrame FromArena(Vector2 centre, float arenaRadius, float edge)
+    {
+        var side = MathF.Max(arenaRadius, 1f) / Math.Clamp(edge, 0.05f, 0.5f);
+
+        return new PlanFrame(centre.X - (side * 0.5f), centre.Y - (side * 0.5f), side);
+    }
+
+    /// <summary>How far the furthest of these points sits from the frame's middle, 0.5 being the edge.</summary>
+    public float Reach(IReadOnlyList<Vector2> points)
+    {
+        var centre = new Vector2(MinX + (Side * 0.5f), MinY + (Side * 0.5f));
+        var reach = 0f;
+
+        foreach (var p in points)
+        {
+            reach = MathF.Max(reach, MathF.Abs(p.X - centre.X));
+            reach = MathF.Max(reach, MathF.Abs(p.Y - centre.Y));
+        }
+
+        return reach / Side;
+    }
+
+    /// <summary>The same frame widened by a factor, keeping its centre.</summary>
+    public PlanFrame Widened(float factor)
+    {
+        var side = Side * MathF.Max(1f, factor);
+        var centre = new Vector2(MinX + (Side * 0.5f), MinY + (Side * 0.5f));
+
+        return new PlanFrame(centre.X - (side * 0.5f), centre.Y - (side * 0.5f), side);
+    }
+
     public Vector2 Normalise(float x, float y) => new((x - MinX) / Side, (y - MinY) / Side);
 
     /// <summary>A length in source pixels as a fraction of the arena.</summary>

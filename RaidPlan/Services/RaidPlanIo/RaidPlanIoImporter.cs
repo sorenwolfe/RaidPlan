@@ -22,6 +22,12 @@ public sealed class RaidPlanIoReport
     /// <summary>Text boxes that became slide notes rather than objects.</summary>
     public int NotesMoved { get; set; }
 
+    /// <summary>Seats that took a role, and sometimes a job, from the plan's own token artwork.</summary>
+    public int RolesRecognised { get; set; }
+
+    /// <summary>How many of those named an actual job rather than just a role.</summary>
+    public int JobsRecognised { get; set; }
+
     public Dictionary<string, int> ByType { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public Dictionary<string, int> Skipped { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -31,6 +37,12 @@ public sealed class RaidPlanIoReport
     public string Summary()
     {
         var text = $"{Slides} slide(s), {Items} object(s), {TimelineSteps} timeline step(s).";
+
+        if (RolesRecognised > 0)
+        {
+            text += $" {RolesRecognised} seat(s) got their role";
+            text += JobsRecognised > 0 ? $", {JobsRecognised} of them a job." : ".";
+        }
 
         if (NotesMoved > 0)
             text += $" {NotesMoved} text box(es) became slide notes.";
@@ -64,6 +76,21 @@ public static class RaidPlanIoImporter
 
     /// <summary>Margin left around the plan's contents, as a fraction of its own size.</summary>
     public const float Padding = 0.04f;
+
+    /// <summary>Where our own arena outline is drawn, as a fraction of the square.</summary>
+    public const float ArenaEdge = 0.47f;
+
+    /// <summary>
+    /// How far the frame may be widened past the arena to keep stray objects on the board.
+    /// </summary>
+    /// <remarks>
+    /// Room for a mechanic that overhangs the platform by half its radius, and no more. Past that
+    /// the choice is between an arena drawn too small to read and a handful of objects hanging
+    /// over the edge, and the arena wins — it is the thing everyone is looking at. Objects that
+    /// end up outside are still drawn; they are just outside the outline, which is where the
+    /// original plan had them anyway.
+    /// </remarks>
+    public const float MaxWidening = 1.60f;
 
     /// <summary>Types that describe the board rather than sit on it, so they never size the frame.</summary>
     private static readonly HashSet<string> NotOnTheBoard =
@@ -113,9 +140,7 @@ public static class RaidPlanIoImporter
             .Select(n => n.Position)
             .ToList();
 
-        var frame = TryWaymarkCentre(parsed, out var centre)
-            ? PlanFrame.Around(centre, onBoard, Padding)
-            : PlanFrame.Fit(onBoard, Padding);
+        var frame = BuildFrame(parsed, onBoard);
 
         var doc = RaidPlanDocument.CreateDefault("Imported plan");
         doc.Slides.Clear();
@@ -138,7 +163,7 @@ public static class RaidPlanIoImporter
             if (!slideByStep.TryGetValue(node.Step, out var slide))
                 continue;
 
-            var item = Translate(node, frame, seatLookup, bound, report);
+            var item = Translate(node, frame, doc, seatLookup, bound, report);
             if (item == null)
             {
                 Bump(report.Skipped, node.Type);
@@ -154,6 +179,8 @@ public static class RaidPlanIoImporter
 
         report.Slides = doc.Slides.Count;
         report.SeatsBound = bound.Count;
+        report.RolesRecognised = doc.Roster.Count(seat => seat.Role != RaidRole.Unknown);
+        report.JobsRecognised = doc.Roster.Count(seat => seat.JobId != 0);
 
         ApplyNotes(root, doc, report);
 
@@ -167,6 +194,30 @@ public static class RaidPlanIoImporter
 
         document = PlanNormaliser.Normalise(doc);
         return true;
+    }
+
+    /// <summary>
+    /// Works out how the source coordinates map onto our arena.
+    /// </summary>
+    /// <remarks>
+    /// Their canvas is centred on the arena and the arena is as tall as the canvas, so the
+    /// distance from the waymark ring's centre up to the top of the canvas is the arena's radius.
+    /// That gives a scale that depends on the arena rather than on how far the drawing happens to
+    /// spread, which is what stops a busy plan importing smaller than a quiet one.
+    /// </remarks>
+    private static PlanFrame BuildFrame(IReadOnlyList<Node> parsed, IReadOnlyList<Vector2> onBoard)
+    {
+        if (!TryWaymarkCentre(parsed, out var centre) || centre.Y <= 1f)
+            return PlanFrame.Fit(onBoard, Padding);
+
+        var frame = PlanFrame.FromArena(centre, centre.Y, ArenaEdge);
+
+        // Widen only if something would otherwise fall off the board, and only so far.
+        var reach = frame.Reach(onBoard);
+        if (reach <= 0.5f)
+            return frame;
+
+        return frame.Widened(MathF.Min(reach / 0.5f * (1f + Padding), MaxWidening));
     }
 
     /// <summary>
@@ -197,7 +248,8 @@ public static class RaidPlanIoImporter
     // ---------------------------------------------------------------- translation
 
     private static CanvasItem? Translate(
-        Node node, PlanFrame frame, Dictionary<string, int> seats, HashSet<int> bound, RaidPlanIoReport report)
+        Node node, PlanFrame frame, RaidPlanDocument doc, Dictionary<string, int> seats,
+        HashSet<int> bound, RaidPlanIoReport report)
     {
         switch (node.Type)
         {
@@ -205,7 +257,7 @@ public static class RaidPlanIoImporter
                 return null;
 
             case "marker":
-                return Marker(node, frame, seats, bound);
+                return Marker(node, frame, doc, seats, bound);
 
             case "waypoint":
                 return Waymark(node, frame);
@@ -235,12 +287,16 @@ public static class RaidPlanIoImporter
         }
     }
 
-    private static CanvasItem Marker(Node node, PlanFrame frame, Dictionary<string, int> seats, HashSet<int> bound)
+    private static CanvasItem Marker(
+        Node node, PlanFrame frame, RaidPlanDocument doc, Dictionary<string, int> seats, HashSet<int> bound)
     {
         var item = Base(node, frame, CanvasItemKind.PlayerToken);
         item.Text = node.Text ?? string.Empty;
         item.Radius = frame.Length(node.Width * 0.5f);
         item.Color = node.Colour("bgColor", 0);
+
+        // The artwork says which role, and often which job, is standing there.
+        var who = JobAssets.Read(node.Asset);
 
         // Their label is the seat name, and ours are named the same way out of the box, so a
         // token can land on the seat it was drawn for rather than floating unbound.
@@ -250,6 +306,21 @@ public static class RaidPlanIoImporter
             item.SlotIndex = index;
             item.Text = string.Empty;
             bound.Add(index);
+
+            // The plan knows what everyone was playing; the blank roster does not.
+            var seat = doc.Roster[index];
+            if (who.KnowsJob)
+                seat.JobId = who.JobId;
+            if (who.Role != RaidRole.Unknown)
+            {
+                seat.Role = who.Role;
+                seat.Color = RoleColors.Default(who.Role);
+            }
+        }
+        else if (who.Role != RaidRole.Unknown && item.Color == 0)
+        {
+            // Unbound, so it keeps its caption — but it can still be the right colour.
+            item.Color = RoleColors.Default(who.Role);
         }
 
         return item;
@@ -506,6 +577,9 @@ public static class RaidPlanIoImporter
 
         public string? ArenaImageUrl { get; init; }
 
+        /// <summary>Image path on a marker, which names the role or the job.</summary>
+        public string? Asset { get; init; }
+
         private JObject Attr { get; init; } = new();
 
         public uint Colour(string key, uint fallback) => ParseColour(Attr.Value<string>(key), fallback);
@@ -540,6 +614,7 @@ public static class RaidPlanIoImporter
                 AbilityId = attr.Value<string>("abilityId"),
                 Emoji = attr.Value<string>("emoji"),
                 ArenaImageUrl = attr.Value<string>("imageUrl"),
+                Asset = attr.Value<string>("asset"),
                 Attr = attr,
             };
         }

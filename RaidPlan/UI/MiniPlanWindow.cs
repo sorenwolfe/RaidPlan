@@ -35,6 +35,8 @@ public sealed class MiniPlanWindow : Window, IDisposable
     private bool anchorPendingSave;
     private bool dragging;
     private Vector2 dragGrab;
+    private string noteText = string.Empty;
+    private float noteHeight;
     private ThemeScope theme;
 
     public MiniPlanWindow()
@@ -107,7 +109,10 @@ public sealed class MiniPlanWindow : Window, IDisposable
             dragging = false;
 
         var side = Math.Clamp(Plugin.Config.MiniPlanSize, 120f, 520f) * UiHelpers.Scale;
-        ImGui.SetNextWindowSize(new Vector2(side, side), ImGuiCond.Always);
+        noteText = CurrentNotes();
+        noteHeight = MeasureNotes(noteText, side);
+
+        ImGui.SetNextWindowSize(new Vector2(side, side + noteHeight), ImGuiCond.Always);
 
         // Only steer the position while the mouse is off it. Otherwise a drag fights the anchor.
         if (ignoringMouse)
@@ -148,6 +153,9 @@ public sealed class MiniPlanWindow : Window, IDisposable
         var size = ImGui.GetWindowSize();
         var drawList = ImGui.GetWindowDrawList();
 
+        // The arena keeps its square; the notes strip is extra height under it.
+        var board = new Vector2(size.X, size.Y - noteHeight);
+
         DrawPanel(drawList, min, size);
 
         canvas.HighlightSlot = Plugin.Config.MiniPlanHighlightMe
@@ -157,9 +165,10 @@ public sealed class MiniPlanWindow : Window, IDisposable
         // The arena is square and the panel has a hairline inset, so give the canvas the inner box.
         var inset = 3f * UiHelpers.Scale;
         ImGui.SetCursorPos(new Vector2(inset, inset));
-        canvas.Draw(plan, slide, new Vector2(size.X - (inset * 2), size.Y - (inset * 2)), editable: false);
+        canvas.Draw(plan, slide, new Vector2(board.X - (inset * 2), board.Y - (inset * 2)), editable: false);
 
-        DrawSlideDots(drawList, min, size, plan.Slides.Count, index);
+        DrawSlideDots(drawList, min, board, plan.Slides.Count, index);
+        DrawNotes(drawList, min, size, board);
 
         if (!ignoringMouse)
             DrawIdleChrome(drawList, min, size);
@@ -202,6 +211,67 @@ public sealed class MiniPlanWindow : Window, IDisposable
                 UiHelpers.WithAlpha(0xFFFFFFFF, here ? 0.85f : 0.25f),
                 12);
         }
+    }
+
+    /// <summary>The notes on the slide being shown, trimmed of blank lines.</summary>
+    private static string CurrentNotes()
+    {
+        if (!Plugin.Config.MiniPlanShowNotes)
+            return string.Empty;
+
+        var plan = Plugin.Plans.Active;
+        if (plan == null || plan.Slides.Count == 0)
+            return string.Empty;
+
+        var index = Math.Clamp(Plugin.Main.SlideIndex, 0, plan.Slides.Count - 1);
+        return plan.Slides[index].Notes.Trim();
+    }
+
+    /// <summary>
+    /// How much height the notes need, capped so a slide with an essay on it cannot grow the
+    /// window down over the hotbars.
+    /// </summary>
+    private static float MeasureNotes(string text, float width)
+    {
+        if (text.Length == 0)
+            return 0f;
+
+        var pad = 6f * UiHelpers.Scale;
+        var lines = Math.Clamp(Plugin.Config.MiniPlanNoteLines, 1, 12);
+        var wrapped = ImGui.CalcTextSize(text, false, width - (pad * 2)).Y;
+
+        return MathF.Min(wrapped, ImGui.GetTextLineHeight() * lines) + (pad * 2);
+    }
+
+    private void DrawNotes(ImDrawListPtr drawList, Vector2 min, Vector2 size, Vector2 board)
+    {
+        if (noteHeight <= 0f || noteText.Length == 0)
+            return;
+
+        var pad = 6f * UiHelpers.Scale;
+        var top = min.Y + board.Y;
+
+        drawList.AddLine(
+            new Vector2(min.X + pad, top),
+            new Vector2(min.X + size.X - pad, top),
+            Palette.Line(0.10f),
+            1f);
+
+        // The height is capped, so a long note has to be cut off rather than run out of the
+        // bottom of the window and over the hotbars.
+        drawList.PushClipRect(
+            new Vector2(min.X + pad, top),
+            new Vector2(min.X + size.X - pad, min.Y + size.Y - (pad * 0.5f)),
+            true);
+
+        ImGui.SetCursorPos(new Vector2(pad, board.Y + pad));
+        ImGui.PushTextWrapPos(size.X - pad);
+        ImGui.PushStyleColor(ImGuiCol.Text, Palette.Vec(Palette.TextMuted));
+        ImGui.TextUnformatted(noteText);
+        ImGui.PopStyleColor();
+        ImGui.PopTextWrapPos();
+
+        drawList.PopClipRect();
     }
 
     /// <summary>
