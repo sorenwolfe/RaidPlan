@@ -44,11 +44,30 @@ public readonly struct PlanFrame
             max = Vector2.Max(max, p);
         }
 
-        var size = max - min;
-        var side = MathF.Max(MathF.Max(size.X, size.Y), 1f) * (1f + (padding * 2f));
+        return Around((min + max) * 0.5f, points, padding);
+    }
 
-        // Centre the content in the square, so the letterboxing is even on both sides.
-        var centre = (min + max) * 0.5f;
+    /// <summary>
+    /// Fits around a given centre rather than the middle of the bounding box.
+    /// </summary>
+    /// <remarks>
+    /// Given the waymark ring's centre this keeps the arena in the middle of the square. A plan
+    /// drawn lopsided — everything happening in the north half — otherwise gets its whole arena
+    /// shoved off-centre to make room for empty space.
+    /// </remarks>
+    public static PlanFrame Around(Vector2 centre, IReadOnlyList<Vector2> points, float padding)
+    {
+        if (points.Count == 0)
+            return new PlanFrame(centre.X - 0.5f, centre.Y - 0.5f, 1f);
+
+        var reach = 0f;
+        foreach (var p in points)
+        {
+            reach = MathF.Max(reach, MathF.Abs(p.X - centre.X));
+            reach = MathF.Max(reach, MathF.Abs(p.Y - centre.Y));
+        }
+
+        var side = MathF.Max(reach * 2f, 1f) * (1f + (padding * 2f));
 
         return new PlanFrame(centre.X - (side * 0.5f), centre.Y - (side * 0.5f), side);
     }

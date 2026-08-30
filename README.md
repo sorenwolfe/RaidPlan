@@ -152,9 +152,9 @@ to `/xlplugins` → Settings → Experimental and check the URL is there and spe
 **An update fails to install.** Restart the game and try again. If it still fails after a restart,
 open an issue and mention what version you're coming from.
 
-**An imported plan looks too big or too small.** Positions are fitted to the drawing rather than
-to the original arena, since the file doesn't say how large that was. Change the arena shape and
-size on the Slides tab and it'll settle.
+**An imported plan looks too big or too small.** The file doesn't say how large the original arena
+was, so the scale is worked out from the plan's own contents. Change the arena shape and size on
+the Slides tab and it'll settle.
 
 **FF Logs importing won't connect.** Open settings and look at the FF Logs section — it says
 whether the key works. "Forget them" clears both boxes so you can paste a fresh pair.

@@ -19,14 +19,29 @@ public sealed class RaidPlanIoReport
 
     public int SeatsBound { get; set; }
 
+    /// <summary>Text boxes that became slide notes rather than objects.</summary>
+    public int NotesMoved { get; set; }
+
     public Dictionary<string, int> ByType { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public Dictionary<string, int> Skipped { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public List<string> Notes { get; } = new();
 
-    public string Summary() =>
-        $"{Slides} slide(s), {Items} object(s), {TimelineSteps} timeline step(s).";
+    public string Summary()
+    {
+        var text = $"{Slides} slide(s), {Items} object(s), {TimelineSteps} timeline step(s).";
+
+        if (NotesMoved > 0)
+            text += $" {NotesMoved} text box(es) became slide notes.";
+
+        var dropped = Skipped.Where(p => !p.Key.Equals("arena", StringComparison.OrdinalIgnoreCase))
+            .Sum(p => p.Value);
+        if (dropped > 0)
+            text += $" {dropped} object(s) had no equivalent and were left out.";
+
+        return text;
+    }
 }
 
 /// <summary>
@@ -48,7 +63,11 @@ public static class RaidPlanIoImporter
     public const float WedgeSweepDegrees = 45f;
 
     /// <summary>Margin left around the plan's contents, as a fraction of its own size.</summary>
-    public const float Padding = 0.08f;
+    public const float Padding = 0.04f;
+
+    /// <summary>Types that describe the board rather than sit on it, so they never size the frame.</summary>
+    private static readonly HashSet<string> NotOnTheBoard =
+        new(StringComparer.OrdinalIgnoreCase) { "arena", "itext", "emoji" };
 
     public static bool TryImport(string? json, out RaidPlanDocument? document, out RaidPlanIoReport report, out string error)
     {
@@ -86,8 +105,17 @@ public static class RaidPlanIoImporter
             return false;
         }
 
-        var frame = PlanFrame.Fit(
-            parsed.Where(n => n.HasPosition).Select(n => n.Position).ToList(), Padding);
+        // Notes are pinned in the margins beside the arena, sometimes a long way out. Sizing the
+        // frame to include them shrinks the arena itself into the middle of the square, which is
+        // exactly what it looked like before this was excluded.
+        var onBoard = parsed
+            .Where(n => n.HasPosition && !NotOnTheBoard.Contains(n.Type))
+            .Select(n => n.Position)
+            .ToList();
+
+        var frame = TryWaymarkCentre(parsed, out var centre)
+            ? PlanFrame.Around(centre, onBoard, Padding)
+            : PlanFrame.Fit(onBoard, Padding);
 
         var doc = RaidPlanDocument.CreateDefault("Imported plan");
         doc.Slides.Clear();
@@ -122,6 +150,8 @@ public static class RaidPlanIoImporter
             report.Items++;
         }
 
+        ApplySlideNotes(parsed, slideByStep, report);
+
         report.Slides = doc.Slides.Count;
         report.SeatsBound = bound.Count;
 
@@ -136,6 +166,31 @@ public static class RaidPlanIoImporter
         }
 
         document = PlanNormaliser.Normalise(doc);
+        return true;
+    }
+
+    /// <summary>
+    /// The middle of the waymark ring, which is the one landmark whose position means something.
+    /// The eight marks sit symmetrically about the arena centre, so their average is that centre.
+    /// </summary>
+    public static bool TryWaymarkCentre(IReadOnlyList<Node> nodes, out Vector2 centre)
+    {
+        centre = Vector2.Zero;
+
+        var marks = nodes
+            .Where(n => n.Type == "waypoint" && n.HasPosition)
+            .GroupBy(n => (n.WayId ?? string.Empty).ToLowerInvariant())
+            .Select(g => g.First().Position)
+            .ToList();
+
+        // Fewer than the full set and the average is pulled off centre by whichever are missing.
+        if (marks.Count < 8)
+            return false;
+
+        foreach (var mark in marks)
+            centre += mark;
+
+        centre /= marks.Count;
         return true;
     }
 
@@ -155,11 +210,10 @@ public static class RaidPlanIoImporter
             case "waypoint":
                 return Waymark(node, frame);
 
+            // Handled as notes, not as things on the board.
             case "itext":
-                return Label(node, frame, node.Text);
-
             case "emoji":
-                return Label(node, frame, node.Emoji);
+                return null;
 
             case "circle":
                 return Zone(node, frame, ZoneShape.Circle);
@@ -206,14 +260,6 @@ public static class RaidPlanIoImporter
         var item = Base(node, frame, CanvasItemKind.Waymark);
         item.Text = (node.WayId ?? "A").ToUpperInvariant();
         item.Radius = frame.Length(node.Width * 0.5f);
-        return item;
-    }
-
-    private static CanvasItem Label(Node node, PlanFrame frame, string? text)
-    {
-        var item = Base(node, frame, CanvasItemKind.Label);
-        item.Text = text ?? string.Empty;
-        item.Color = node.Colour("fill", 0xFFFFFFFF);
         return item;
     }
 
@@ -287,12 +333,10 @@ public static class RaidPlanIoImporter
             case "ff-square":
                 return Zone(node, frame, ZoneShape.Rectangle);
 
+            // A stack marker is a circle you gather in. The zone shape carries that; the caption
+            // does not, because zones never draw one.
             case "ff-stack":
-            {
-                var item = Zone(node, frame, ZoneShape.Circle);
-                item.Text = "Stack";
-                return item;
-            }
+                return Zone(node, frame, ZoneShape.Circle);
 
             case "ff-pie":
                 return Cone(node, frame, PieSweepDegrees);
@@ -336,6 +380,36 @@ public static class RaidPlanIoImporter
         var sin = MathF.Sin(r);
 
         return new Vector2((point.X * cos) - (point.Y * sin), (point.X * sin) + (point.Y * cos));
+    }
+
+    /// <summary>
+    /// Text pinned beside the arena is the strategy written out, so it becomes the slide's notes
+    /// rather than labels floating on the board.
+    /// </summary>
+    private static void ApplySlideNotes(
+        IReadOnlyList<Node> nodes, Dictionary<int, Slide> slideByStep, RaidPlanIoReport report)
+    {
+        foreach (var group in nodes.Where(n => n.Type is "itext" or "emoji").GroupBy(n => n.Step))
+        {
+            if (!slideByStep.TryGetValue(group.Key, out var slide))
+                continue;
+
+            // Down the board then across, so the notes come out in the order they were read.
+            var lines = group
+                .OrderBy(n => n.Position.Y)
+                .ThenBy(n => n.Position.X)
+                .Select(n => (n.Type == "emoji" ? n.Emoji : n.Text) ?? string.Empty)
+                .Select(t => t.Replace("\r\n", "\n").Trim())
+                .Where(t => t.Length > 0)
+                .ToList();
+
+            if (lines.Count == 0)
+                continue;
+
+            var text = string.Join("\n", lines);
+            slide.Notes = slide.Notes.Length == 0 ? text : slide.Notes + "\n" + text;
+            report.NotesMoved += lines.Count;
+        }
     }
 
     // ---------------------------------------------------------------- notes
