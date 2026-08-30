@@ -89,6 +89,11 @@ Hover it out of combat to move it or close it, and `/raidplan mini` brings it ba
 and icons on the drawing tools. The headings use the game's own font rather than a generic one.
 If you'd rather it matched your other plugins, one switch in settings turns the whole thing off.
 
+**Bring in a plan from raidplan.io.** Paste a link and RaidPlan rebuilds it: every slide, the
+party tokens on the right seats, waymarks, AoE shapes, arrows and text. If the notes hold a fight
+timeline it reads that too, so the steps and slide names come across as well. It comes in as a new
+plan, so nothing you already have is touched.
+
 **Trace a plan you already have.** Got a strat as a screenshot — from a website, a Discord post, a
 photo of someone's whiteboard? Drop the picture behind the arena, draw your own slide on top of it,
 then fade it out. Much faster than rebuilding from memory, and it works with any source. The
@@ -146,6 +151,10 @@ to `/xlplugins` → Settings → Experimental and check the URL is there and spe
 
 **An update fails to install.** Restart the game and try again. If it still fails after a restart,
 open an issue and mention what version you're coming from.
+
+**An imported plan looks too big or too small.** Positions are fitted to the drawing rather than
+to the original arena, since the file doesn't say how large that was. Change the arena shape and
+size on the Slides tab and it'll settle.
 
 **FF Logs importing won't connect.** Open settings and look at the FF Logs section — it says
 whether the key works. "Forget them" clears both boxes so you can paste a fresh pair.

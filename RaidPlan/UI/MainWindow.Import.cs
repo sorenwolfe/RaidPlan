@@ -8,6 +8,8 @@ using Dalamud.Bindings.ImGui;
 using RaidPlan.Model;
 using RaidPlan.Services;
 using RaidPlan.Services.FfLogs;
+using RaidPlan.Services.RaidPlanIo;
+using RaidPlan.UI.Theme;
 
 namespace RaidPlan.UI;
 
@@ -26,8 +28,22 @@ public sealed partial class MainWindow
     private readonly ImportOptions importOptions = new();
     private bool showCredentials;
 
+    private string planLink = string.Empty;
+    private bool planBusy;
+    private string planFilePath = string.Empty;
+    private string planFileStatus = string.Empty;
+    private bool planFileFailed;
+
     private void DrawImportTab(RaidPlanDocument plan)
     {
+        DrawPlanFileImport();
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        ImGui.TextDisabled("From FF Logs");
+        ImGui.Spacing();
+
         ImGui.TextWrapped(
             "Paste an FF Logs link and pull the fight's timeline straight in, along with the " +
             "cooldowns each player pressed. Seats are matched to log players by job.");
@@ -113,6 +129,163 @@ public sealed partial class MainWindow
 
         if (loadedFight != null)
             DrawPreviewAndApply(plan, loadedFight);
+    }
+
+    /// <summary>
+    /// Rebuilds a plan from raidplan.io. A link fetches the plan's own data file — the same one
+    /// the site's page loads — and a saved file is read straight off disk.
+    /// </summary>
+    private void DrawPlanFileImport()
+    {
+        ImGui.TextDisabled("From raidplan.io");
+        ImGui.Spacing();
+
+        ImGui.TextWrapped("Paste a link to a plan and it comes across as a plan of its own.");
+        ImGui.Spacing();
+
+        ImGui.SetNextItemWidth(-120 * UiHelpers.Scale);
+        UiHelpers.InputTextHint("##plan-link", "https://raidplan.io/plan/…", ref planLink, 512);
+
+        ImGui.SameLine();
+        ImGui.BeginDisabled(planBusy);
+        if (ImGui.Button("Import", new Vector2(-1, 0)))
+            ImportFromLink();
+        ImGui.EndDisabled();
+
+        var parsedLink = PlanUrlParser.Parse(planLink);
+        if (!parsedLink.IsValid && planLink.Trim().Length > 0)
+            ImGui.TextDisabled("No plan code in that. A link looks like raidplan.io/plan/<code>.");
+
+        if (planBusy)
+            ImGui.TextDisabled("Fetching…");
+
+        if (ImGui.TreeNode("Or import a file you saved###plan-file-node"))
+        {
+            ImGui.SetNextItemWidth(-1);
+            UiHelpers.InputTextHint("##plan-file", "Path to a saved .json file", ref planFilePath, 512);
+
+            if (ImGui.Button("Import that file", Vector2.Zero))
+                ImportPlanFile();
+
+            ImGui.SameLine();
+            UiHelpers.HelpMarker(
+                "For a plan a link cannot reach. Open it in a browser, press F12, and on the " +
+                "Network tab copy the response of the .json request from userdata.raidplan.io.");
+
+            ImGui.TreePop();
+        }
+
+        if (planFileStatus.Length == 0)
+            return;
+
+        ImGui.Spacing();
+        ImGui.TextColored(
+            UiHelpers.Pack(planFileFailed ? Palette.Vec(Palette.Danger) : Palette.Vec(Palette.Good)),
+            planFileStatus);
+    }
+
+    private void ImportFromLink()
+    {
+        var parsed = PlanUrlParser.Parse(planLink);
+        if (!parsed.IsValid)
+        {
+            planFileFailed = true;
+            planFileStatus = "No plan code in that link.";
+            return;
+        }
+
+        planBusy = true;
+        planFileStatus = string.Empty;
+
+        var cancel = Plugin.Shutdown;
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                var json = await Plugin.PlanFetcher.GetAsync(parsed.Code, cancel).ConfigureAwait(false);
+                Adopt(json, parsed.Code);
+            }
+            catch (OperationCanceledException)
+            {
+                // Unloading.
+            }
+            catch (PlanFetchException ex)
+            {
+                Fail(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Fail("Could not reach raidplan.io: " + ex.Message);
+                Plugin.Log.Error(ex, "Fetching a raidplan.io plan failed.");
+            }
+            finally
+            {
+                planBusy = false;
+            }
+        }, cancel);
+
+        void Fail(string message)
+        {
+            planFileFailed = true;
+            planFileStatus = message;
+        }
+    }
+
+    private void ImportPlanFile()
+    {
+        var path = planFilePath.Trim().Trim('"');
+
+        if (path.Length == 0)
+        {
+            planFileFailed = true;
+            planFileStatus = "Give the path to the saved plan file first.";
+            return;
+        }
+
+        if (!System.IO.File.Exists(path))
+        {
+            planFileFailed = true;
+            planFileStatus = "Nothing at that path.";
+            return;
+        }
+
+        try
+        {
+            Adopt(System.IO.File.ReadAllText(path), System.IO.Path.GetFileNameWithoutExtension(path));
+        }
+        catch (Exception ex)
+        {
+            planFileFailed = true;
+            planFileStatus = "Could not read that file: " + ex.Message;
+        }
+    }
+
+    /// <summary>Turns fetched or loaded plan data into a plan of our own.</summary>
+    private void Adopt(string json, string name)
+    {
+        if (!RaidPlanIoImporter.TryImport(json, out var imported, out var report, out var error))
+        {
+            planFileFailed = true;
+            planFileStatus = error;
+            return;
+        }
+
+        imported!.Name = name;
+        Plugin.Plans.Import(imported, replaceExisting: false);
+
+        slideIndex = 0;
+        canvas.Select(null);
+        MarkDirty();
+
+        planFileFailed = false;
+        planLink = string.Empty;
+        planFilePath = string.Empty;
+        planFileStatus = report.Summary() +
+                         (report.SeatsBound > 0 ? $" {report.SeatsBound} seat(s) matched." : string.Empty);
+
+        foreach (var note in report.Notes.Take(2))
+            planFileStatus += "\n" + note;
     }
 
     /// <summary>

@@ -7,6 +7,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using RaidPlan.Services;
 using RaidPlan.Services.FfLogs;
+using RaidPlan.Services.RaidPlanIo;
 using RaidPlan.UI;
 using RaidPlan.UI.Theme;
 
@@ -42,6 +43,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static SlideDirector Director { get; private set; } = null!;
     internal static FfLogsClient FfLogs { get; private set; } = null!;
     internal static FfLogsAuth FfLogsAuth { get; private set; } = null!;
+    internal static PlanFetcher PlanFetcher { get; private set; } = null!;
     internal static ThemeFonts Fonts { get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("RaidPlan");
@@ -87,6 +89,7 @@ public sealed class Plugin : IDalamudPlugin
         Director = new SlideDirector();
         FfLogs = new FfLogsClient();
         FfLogsAuth = new FfLogsAuth();
+        PlanFetcher = new PlanFetcher();
         FfLogsAuth.Forget(Config.FfLogsClientId, Config.FfLogsClientSecret);
         Fonts = new ThemeFonts();
 
@@ -261,6 +264,7 @@ public sealed class Plugin : IDalamudPlugin
         Safely(Learner.Dispose, "shut down the learner");
         Safely(Encounter.Dispose, "shut down the encounter monitor");
         Safely(FfLogs.Dispose, "close the FF Logs client");
+        Safely(PlanFetcher.Dispose, "close the plan fetcher");
         Safely(Backdrops.Dispose, "drop the backdrop textures");
         Safely(Fonts.Dispose, "release the font handles");
         Safely(Sprites.Forget, "drop the sprite handles");
