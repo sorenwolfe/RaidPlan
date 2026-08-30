@@ -101,10 +101,19 @@ public sealed class ArenaCanvas
 
         drawList.PopClipRect();
 
-        ImGui.InvisibleButton(CanvasId, canvasSize, ImGuiButtonFlags.MouseButtonLeft | ImGuiButtonFlags.MouseButtonRight);
-
         if (editable)
+        {
+            ImGui.InvisibleButton(CanvasId, canvasSize, ImGuiButtonFlags.MouseButtonLeft | ImGuiButtonFlags.MouseButtonRight);
             changed |= HandleInteraction(plan, slide);
+        }
+        else
+        {
+            // A read-only arena takes no input. An InvisibleButton here would still claim the
+            // hovered id for the whole area, and ImGui will not start a window drag, or let
+            // anything drawn on top take the mouse, while an item is hovered. In the mini window
+            // that is the entire window, which is how its move and close stopped working.
+            ImGui.Dummy(canvasSize);
+        }
 
         // Outline last so it sits above everything, including the hit region.
         drawList.AddRect(origin, origin + canvasSize, 0x40FFFFFF, 4f, ImDrawFlags.None, 1f);

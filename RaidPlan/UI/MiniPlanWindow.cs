@@ -33,6 +33,8 @@ public sealed class MiniPlanWindow : Window, IDisposable
 
     private bool ignoringMouse = true;
     private bool anchorPendingSave;
+    private bool dragging;
+    private Vector2 dragGrab;
     private ThemeScope theme;
 
     public MiniPlanWindow()
@@ -100,6 +102,9 @@ public sealed class MiniPlanWindow : Window, IDisposable
             Plugin.Encounter.InCombat, Plugin.Config.MiniPlanUnlocked);
 
         Flags = ignoringMouse ? BaseFlags | ImGuiWindowFlags.NoInputs : BaseFlags;
+
+        if (ignoringMouse)
+            dragging = false;
 
         var side = Math.Clamp(Plugin.Config.MiniPlanSize, 120f, 520f) * UiHelpers.Scale;
         ImGui.SetNextWindowSize(new Vector2(side, side), ImGuiCond.Always);
@@ -200,37 +205,65 @@ public sealed class MiniPlanWindow : Window, IDisposable
     }
 
     /// <summary>
-    /// Shown only when the window is taking the mouse — that is, out of combat. A grab handle so
-    /// it's obvious the thing can be moved, and a close button that is actually clickable.
+    /// Shown only when the window is taking the mouse — that is, out of combat. The close button
+    /// and the drag are hit-tested by hand rather than left to ImGui: this window has no title
+    /// bar, and ImGui's drag-anywhere fallback is something the player can switch off in Dalamud's
+    /// settings, which would silently leave the thing stuck where it is.
     /// </summary>
     private void DrawIdleChrome(ImDrawListPtr drawList, Vector2 min, Vector2 size)
     {
         var hovered = ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
-        if (!hovered)
-            return;
-
+        var mouse = ImGui.GetMousePos();
         var max = min + size;
-        var rounding = 8f * UiHelpers.Scale;
-
-        drawList.AddRect(min, max, UiHelpers.WithAlpha(0xFFFFFFFF, 0.30f), rounding, ImDrawFlags.None, 1.5f);
 
         var button = 15f * UiHelpers.Scale;
         var pad = 6f * UiHelpers.Scale;
-        var centre = new Vector2(max.X - pad - (button * 0.5f), min.Y + pad + (button * 0.5f));
+        var closeMin = new Vector2(max.X - pad - button, min.Y + pad);
+        var closeMax = closeMin + new Vector2(button, button);
 
-        ImGui.SetCursorPos(new Vector2(size.X - pad - button, pad));
-        var pressed = ImGui.InvisibleButton("##mini-close", new Vector2(button, button), ImGuiButtonFlags.MouseButtonLeft);
-        var overClose = ImGui.IsItemHovered();
+        var overClose = hovered &&
+                        mouse.X >= closeMin.X && mouse.X <= closeMax.X &&
+                        mouse.Y >= closeMin.Y && mouse.Y <= closeMax.Y;
 
-        drawList.AddCircleFilled(centre, button * 0.5f, UiHelpers.WithAlpha(overClose ? 0xFF3B4CE0 : 0xFF000000, overClose ? 0.9f : 0.45f), 16);
+        if (!dragging && hovered && !overClose && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        {
+            dragging = true;
+            dragGrab = mouse - min;
+        }
+
+        if (dragging)
+        {
+            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                ImGui.SetWindowPos(mouse - dragGrab, ImGuiCond.Always);
+            else
+                dragging = false;
+        }
+
+        if (!hovered && !dragging)
+            return;
+
+        var rounding = 8f * UiHelpers.Scale;
+        drawList.AddRect(min, max, UiHelpers.WithAlpha(0xFFFFFFFF, 0.30f), rounding, ImDrawFlags.None, 1.5f);
+
+        var centre = closeMin + new Vector2(button * 0.5f, button * 0.5f);
+        drawList.AddCircleFilled(centre, button * 0.5f,
+            UiHelpers.WithAlpha(overClose ? 0xFF3B4CE0 : 0xFF000000, overClose ? 0.9f : 0.45f), 16);
 
         var arm = button * 0.22f;
         var cross = UiHelpers.WithAlpha(0xFFFFFFFF, overClose ? 1f : 0.7f);
         drawList.AddLine(centre - new Vector2(arm, arm), centre + new Vector2(arm, arm), cross, 1.6f);
         drawList.AddLine(centre - new Vector2(arm, -arm), centre + new Vector2(arm, -arm), cross, 1.6f);
 
-        if (pressed)
+        // Released rather than clicked, so a click that started elsewhere and drifted over the
+        // button on the way up doesn't close the window mid-drag.
+        if (overClose && !dragging && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+        {
             Close();
+            return;
+        }
+
+        if (dragging)
+            return;
 
         if (overClose)
             UiHelpers.Tooltip("Hide the mini plan. Bring it back with /raidplan mini.");
