@@ -15,6 +15,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly ArenaCanvas canvas = new();
 
     private int slideIndex;
+
+    /// <summary>Slide the planner is on. The mini window mirrors this so the two never disagree.</summary>
+    public int SlideIndex => slideIndex;
+
     private bool dirty;
     private DateTime lastSaveUtc = DateTime.UtcNow;
 
@@ -278,7 +282,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Active team profile. Each team keeps its own call wording and delivery settings.");
+            UiHelpers.Tooltip("Active team profile. Each team keeps its own call wording and delivery settings.");
 
         ImGui.SameLine();
         var remindersOn = Plugin.Config.RemindersEnabled;

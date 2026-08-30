@@ -45,7 +45,7 @@ Everyone in your group does this once. After that, updates work like every other
 **Draw the fight.** Each slide is one moment of the fight — an arena with your party on it. Drop
 player tokens, waymarks, boss markers, AoE shapes (circles, donuts, cones, lines), arrows, tethers,
 text and freehand drawing. Pick the arena shape to match the real one. Players show up with their
-job icon, so a board reads at a glance.
+job icon, so a board reads at a glance. Hover any tool to see what it does.
 
 **Everyone gets their own instructions.** You build the plan around *positions* — MT, H2, R1 —
 not names. Give each position a job, and RaidPlan shows you that job's real spell list to pick
@@ -76,6 +76,13 @@ in — and if the jobs match up, it can even copy the cooldowns those players ac
 the right mechanics. This one needs a free key from FF Logs (they don't allow anonymous access);
 only the person building the plan needs it, not the whole group.
 
+**A small window for during the fight.** In raids, a compact copy of the current slide appears on
+screen, about the size of your minimap. Drag it wherever you like. It shows the same slide the
+planner is on, so it keeps up with the fight by itself, and it puts a ring around *your* marker —
+found by your character name, or by your job when it only appears once in the plan. While you're
+in combat it ignores the mouse completely, so it can never swallow a click meant for the game.
+Hover it out of combat to move it or close it, and `/raidplan mini` brings it back.
+
 **Share it with a code.** A finished plan turns into one long code. Copy it, paste it in Discord,
 everyone else pastes it back in. Nothing is uploaded anywhere and nobody needs an account.
 
@@ -105,6 +112,7 @@ You can skip straight to step 5 and build everything by hand if you'd rather.
 | `/raidplan next` / `prev` | Move a slide forward or back — good on a hotbar macro |
 | `/raidplan calls` | Turns the spoken calls on and off |
 | `/raidplan follow` | Turns automatic slide-changing on and off |
+| `/raidplan mini` | Shows or hides the small in-fight window |
 | `/raidplan reset` | Jumps back to the first slide |
 
 ---

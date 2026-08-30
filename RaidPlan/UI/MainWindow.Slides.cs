@@ -9,18 +9,6 @@ namespace RaidPlan.UI;
 
 public sealed partial class MainWindow
 {
-    private static readonly (CanvasTool Tool, string Label, string Tip)[] Tools =
-    {
-        (CanvasTool.Select, "Select", "Click to pick something up, drag to move it. Right-click deletes."),
-        (CanvasTool.PlayerToken, "Player", "Drops a token for the seat chosen below."),
-        (CanvasTool.EnemyToken, "Enemy", "Drops a boss or add marker."),
-        (CanvasTool.Waymark, "Waymark", "Drops the field marker chosen below."),
-        (CanvasTool.Zone, "AoE", "Drops the telegraph shape chosen below."),
-        (CanvasTool.Arrow, "Arrow", "Click once for the tail, again for the head."),
-        (CanvasTool.Tether, "Tether", "Click once at each end."),
-        (CanvasTool.Label, "Text", "Drops a text label you can edit on the right."),
-        (CanvasTool.Pen, "Pen", "Hold and drag to draw freehand."),
-    };
 
     private void DrawSlidesTab(RaidPlanDocument plan)
     {
@@ -143,7 +131,7 @@ public sealed partial class MainWindow
         {
             ImGui.TextDisabled("(manual)");
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Slides stay where you put them. Turn following on in settings, or with /raidplan follow.");
+                UiHelpers.Tooltip("Slides stay where you put them. Turn following on in settings, or with /raidplan follow.");
             return;
         }
 
@@ -226,9 +214,9 @@ public sealed partial class MainWindow
 
     private void DrawToolbar(RaidPlanDocument plan)
     {
-        for (var i = 0; i < Tools.Length; i++)
+        for (var i = 0; i < ToolCatalog.All.Count; i++)
         {
-            var (tool, label, tip) = Tools[i];
+            var (tool, label, tip) = ToolCatalog.All[i];
 
             if (i > 0)
                 UiHelpers.SameLineIfRoom(UiHelpers.ButtonWidth(label));
@@ -244,7 +232,7 @@ public sealed partial class MainWindow
                 ImGui.PopStyleColor();
 
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(tip);
+                UiHelpers.Tooltip(label, tip);
         }
 
         // Contextual options for the selected tool.

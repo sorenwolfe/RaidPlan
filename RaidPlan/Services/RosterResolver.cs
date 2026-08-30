@@ -20,32 +20,68 @@ public sealed class RosterResolver
         if (plan == null || plan.Roster.Count == 0)
             return -1;
 
-        var team = Plugin.Config.GetActiveTeam();
-        if (team.PinnedSlotIndex >= 0 && team.PinnedSlotIndex < plan.Roster.Count)
-            return team.PinnedSlotIndex;
-
         var local = Plugin.ObjectTable.LocalPlayer;
-        if (local == null)
+
+        return MatchSeat(
+            plan.Roster,
+            local?.Name.TextValue ?? string.Empty,
+            local?.ClassJob.RowId ?? 0,
+            Plugin.Config.GetActiveTeam().PinnedSlotIndex);
+    }
+
+    /// <summary>
+    /// Works out which seat a player is sitting in. Split out from the game lookup so the rules
+    /// can be tested.
+    /// </summary>
+    /// <remarks>
+    /// In order: a seat the player pinned by hand, then their character name, then their job.
+    /// The job passes only when exactly one seat could be meant — with two Summoners on the board
+    /// there is no way to tell which is you, and guessing would highlight the wrong person.
+    /// </remarks>
+    public static int MatchSeat(IReadOnlyList<PlayerSlot> roster, string localName, uint localJobId, int pinnedIndex)
+    {
+        if (roster.Count == 0)
             return -1;
 
-        var name = local.Name.TextValue;
-        for (var i = 0; i < plan.Roster.Count; i++)
+        if (pinnedIndex >= 0 && pinnedIndex < roster.Count)
+            return pinnedIndex;
+
+        if (!string.IsNullOrEmpty(localName))
         {
-            if (string.Equals(plan.Roster[i].Name, name, StringComparison.OrdinalIgnoreCase))
-                return i;
+            for (var i = 0; i < roster.Count; i++)
+            {
+                if (string.Equals(roster[i].Name, localName, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
         }
 
-        // Nobody matched by name. Fall back to the only free seat matching our job, if there
-        // is exactly one — that covers a fresh plan where names were never filled in.
-        var jobId = local.ClassJob.RowId;
-        var candidates = new List<int>();
-        for (var i = 0; i < plan.Roster.Count; i++)
+        if (localJobId == 0)
+            return -1;
+
+        // An unnamed seat of our job first: a plan drawn before anyone filled the names in.
+        var free = Only(roster, i => string.IsNullOrWhiteSpace(roster[i].Name) && roster[i].JobId == localJobId);
+        if (free >= 0)
+            return free;
+
+        // Then any seat of our job. This is the case that matters in practice — a plan built by
+        // someone else, with their static's names on it, opened by a player whose job appears once.
+        return Only(roster, i => roster[i].JobId == localJobId);
+    }
+
+    /// <summary>Index of the only seat matching, or -1 when none or several do.</summary>
+    private static int Only(IReadOnlyList<PlayerSlot> roster, Func<int, bool> predicate)
+    {
+        var found = -1;
+        for (var i = 0; i < roster.Count; i++)
         {
-            if (string.IsNullOrWhiteSpace(plan.Roster[i].Name) && plan.Roster[i].JobId == jobId)
-                candidates.Add(i);
+            if (!predicate(i))
+                continue;
+            if (found >= 0)
+                return -1;
+            found = i;
         }
 
-        return candidates.Count == 1 ? candidates[0] : -1;
+        return found;
     }
 
     /// <summary>

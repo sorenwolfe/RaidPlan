@@ -107,3 +107,19 @@ public enum CallAudience
     /// <summary>Only roster slots that have an assignment or a custom line on this entry.</summary>
     AssignedOnly = 1,
 }
+
+/// <summary>When the compact in-fight plan window puts itself on screen.</summary>
+public enum MiniPlanVisibility
+{
+    /// <summary>Only when opened by hand with /raidplan mini.</summary>
+    Never = 0,
+
+    /// <summary>Raids, savage and ultimate. The content people build plans for.</summary>
+    RaidContent = 1,
+
+    /// <summary>Anything you are bound by duty in, dungeons and trials included.</summary>
+    AnyDuty = 2,
+
+    /// <summary>Inside a duty, but only once the pull is running.</summary>
+    InCombatOnly = 3,
+}

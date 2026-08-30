@@ -53,6 +53,12 @@ public sealed class ArenaCanvas
     /// <summary>Roster seat bound to newly placed player tokens.</summary>
     public int BrushSlot { get; set; }
 
+    /// <summary>
+    /// Roster seat to ring as "this is you", or -1 for none. Set from the resolved local seat so
+    /// a player can find themselves on a board they didn't draw.
+    /// </summary>
+    public int HighlightSlot { get; set; } = -1;
+
     public string? SelectedId { get; private set; }
 
     public CanvasItem? GetSelected(Slide slide) =>
@@ -283,8 +289,12 @@ public sealed class ArenaCanvas
         if (string.IsNullOrEmpty(label))
             label = "?";
 
+        var isMe = HighlightSlot >= 0 && item.SlotIndex == HighlightSlot;
+        if (isMe)
+            DrawYouRing(drawList, centre, radius, colour);
+
         drawList.AddCircleFilled(centre, radius, UiHelpers.WithAlpha(colour, 0.92f), 32);
-        drawList.AddCircle(centre, radius, 0xFF101010, 32, 2f);
+        drawList.AddCircle(centre, radius, isMe ? 0xFFFFFFFF : 0xFF101010, 32, isMe ? 2.5f : 2f);
 
         // An explicit icon on the token wins, then the seat's job, then just the seat label.
         var iconId = item.IconId != 0 ? item.IconId : JobIcons.For(jobId);
@@ -294,6 +304,18 @@ public sealed class ArenaCanvas
             UiHelpers.CenteredShadowText(drawList, centre, label, UiHelpers.ReadableTextOn(colour));
         else if (radius > 18f * UiHelpers.Scale)
             UiHelpers.CenteredShadowText(drawList, centre + new Vector2(0, radius + 7f), label, 0xFFFFFFFF);
+    }
+
+    /// <summary>
+    /// The "you are here" marker. A soft halo plus a slowly breathing ring — enough to find at a
+    /// glance on a busy board, calm enough not to pull the eye during a mechanic.
+    /// </summary>
+    private static void DrawYouRing(ImDrawListPtr drawList, Vector2 centre, float radius, uint colour)
+    {
+        var pulse = 0.5f + (0.5f * MathF.Sin((float)ImGui.GetTime() * 2.2f));
+
+        drawList.AddCircleFilled(centre, radius * 1.62f, UiHelpers.WithAlpha(colour, 0.10f + (0.06f * pulse)), 40);
+        drawList.AddCircle(centre, radius * (1.34f + (0.07f * pulse)), UiHelpers.WithAlpha(0xFFFFFFFF, 0.45f + (0.35f * pulse)), 40, 2f);
     }
 
     private void DrawWaymark(ImDrawListPtr drawList, CanvasItem item, Vector2 centre)

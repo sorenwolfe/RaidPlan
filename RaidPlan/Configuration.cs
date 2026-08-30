@@ -142,6 +142,26 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>Print every detected boss cast to the log window, for building timelines.</summary>
     public bool LogDetectedCasts { get; set; }
 
+    // ---------------------------------------------------------------- mini plan
+
+    /// <summary>When the compact in-fight window appears by itself.</summary>
+    public MiniPlanVisibility MiniPlanMode { get; set; } = MiniPlanVisibility.RaidContent;
+
+    /// <summary>Width of the mini plan in unscaled pixels. The game's minimap is around 218.</summary>
+    public float MiniPlanSize { get; set; } = 220f;
+
+    /// <summary>Where it sits, as a fraction of the viewport, so it survives a resolution change.</summary>
+    public Vector2 MiniPlanAnchor { get; set; } = new(0.87f, 0.62f);
+
+    /// <summary>Overall opacity of the panel behind the arena.</summary>
+    public float MiniPlanOpacity { get; set; } = 0.85f;
+
+    /// <summary>Ring the token belonging to this client's seat.</summary>
+    public bool MiniPlanHighlightMe { get; set; } = true;
+
+    /// <summary>Keep it draggable during a pull. Off by default so it can't eat a click.</summary>
+    public bool MiniPlanUnlocked { get; set; }
+
     public TeamProfile GetActiveTeam()
     {
         if (Teams.Count == 0)

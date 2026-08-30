@@ -120,8 +120,8 @@ public sealed partial class MainWindow
         ImGui.Checkbox("Only casts with a bar", ref generateOnlyLongCasts);
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(
-                "Skips instant casts, which are usually auto-attacks and filler rather than\n" +
+            UiHelpers.Tooltip(
+                "Skips instant casts, which are usually auto-attacks and filler rather than " +
                 "mechanics worth a slide.");
         }
 
@@ -241,7 +241,7 @@ public sealed partial class MainWindow
                 if (ImGui.IsItemHovered())
                 {
                     var samples = string.Join(", ", cast.Samples.Select(s => CallTemplate.FormatTime(s)));
-                    ImGui.SetTooltip(
+                    UiHelpers.Tooltip(
                         $"Action #{cast.ActionId}\n" +
                         $"Cast bar about {cast.CastBarSeconds:0.0}s\n" +
                         $"Seen at: {samples}");

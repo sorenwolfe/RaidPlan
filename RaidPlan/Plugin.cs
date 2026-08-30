@@ -50,9 +50,13 @@ public sealed class Plugin : IDalamudPlugin
 
     internal static CancellationToken Shutdown => shutdown.Token;
 
+    /// <summary>The planner. The mini window reads which slide it is on.</summary>
+    internal static MainWindow Main { get; private set; } = null!;
+
     private MainWindow mainWindow = null!;
     private ConfigWindow configWindow = null!;
     private OverlayWindow overlayWindow = null!;
+    private MiniPlanWindow miniWindow = null!;
 
     public Plugin()
     {
@@ -79,12 +83,16 @@ public sealed class Plugin : IDalamudPlugin
         FfLogs = new FfLogsClient();
 
         mainWindow = new MainWindow();
+        Main = mainWindow;
+
         configWindow = new ConfigWindow();
         overlayWindow = new OverlayWindow();
+        miniWindow = new MiniPlanWindow();
 
         WindowSystem.AddWindow(mainWindow);
         WindowSystem.AddWindow(configWindow);
         WindowSystem.AddWindow(overlayWindow);
+        WindowSystem.AddWindow(miniWindow);
 
         overlayWindow.IsOpen = true;
 
@@ -100,6 +108,7 @@ public sealed class Plugin : IDalamudPlugin
                 "        /raidplan next    →  show the next slide\n" +
                 "        /raidplan prev    →  show the previous slide\n" +
                 "        /raidplan follow  →  toggle slides following the fight\n" +
+                "        /raidplan mini    →  toggle the small in-fight window\n" +
                 "        /raidplan reset   →  jump back to the first slide",
         });
 
@@ -177,6 +186,11 @@ public sealed class Plugin : IDalamudPlugin
                 Director.ClearSuppression();
                 break;
 
+            case "mini":
+            case "small":
+                miniWindow.ToggleShown();
+                break;
+
             case "prev":
             case "previous":
                 mainWindow.StepSlide(-1);
@@ -185,7 +199,7 @@ public sealed class Plugin : IDalamudPlugin
 
             default:
                 ChatGui.PrintError(
-                    $"Unknown option '{argument}'. Try: config, calls, follow, reset, next, prev.",
+                    $"Unknown option '{argument}'. Try: config, calls, follow, mini, reset, next, prev.",
                     "RaidPlan",
                     null);
                 break;
@@ -244,6 +258,7 @@ public sealed class Plugin : IDalamudPlugin
         Safely(mainWindow.Dispose, "dispose the planner window");
         Safely(configWindow.Dispose, "dispose the settings window");
         Safely(overlayWindow.Dispose, "dispose the overlay");
+        Safely(miniWindow.Dispose, "dispose the mini plan");
 
         // Saving comes last. A disk error here used to abandon the rest of the teardown.
         Safely(Plans.SaveAll, "save the plans");

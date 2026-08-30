@@ -72,6 +72,29 @@ public static class UiHelpers
         return ImGui.InputTextMultiline(label, ref value, maxLength, size, flags, (ImGui.ImGuiInputTextCallbackDelegate?)null);
     }
 
+    /// <summary>
+    /// A tooltip that wraps and can carry a heading. ImGui.SetTooltip lays its text out on one
+    /// line, so anything longer than a few words runs off the edge of the screen.
+    /// </summary>
+    public static void Tooltip(string body) => Tooltip(null, body);
+
+    public static void Tooltip(string? title, string body)
+    {
+        ImGui.BeginTooltip();
+        ImGui.PushTextWrapPos(ImGui.GetFontSize() * 22f);
+
+        if (!string.IsNullOrEmpty(title))
+        {
+            ImGui.TextColored(Pack(new Vector4(0.54f, 0.68f, 1f, 1f)), title);
+            ImGui.Separator();
+        }
+
+        ImGui.TextUnformatted(body);
+
+        ImGui.PopTextWrapPos();
+        ImGui.EndTooltip();
+    }
+
     public static void HelpMarker(string text)
     {
         ImGui.TextDisabled("(?)");

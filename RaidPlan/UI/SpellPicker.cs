@@ -92,9 +92,9 @@ public sealed class SpellPicker
 
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip(
-                    "Anything on a 30 second or longer recast, plus the role actions.\n" +
-                    "That's mitigation, utility and burst windows, without the rotation.");
+                UiHelpers.Tooltip(
+                    "Anything on a 30 second or longer recast, plus the role actions. That's " +
+                    "mitigation, utility and burst windows, without the rotation.");
             }
         }
 

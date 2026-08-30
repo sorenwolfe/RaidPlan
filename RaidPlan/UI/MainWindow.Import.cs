@@ -227,8 +227,8 @@ public sealed partial class MainWindow
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(
-                "A cooldown pressed this long before a boss cast is taken as being for it.\n" +
+            UiHelpers.Tooltip(
+                "A cooldown pressed this long before a boss cast is taken as being for it. " +
                 "Longer catches pre-planned mitigation; shorter avoids grabbing the wrong mechanic.");
         }
 

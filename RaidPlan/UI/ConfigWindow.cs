@@ -283,6 +283,67 @@ public sealed class ConfigWindow : Window, IDisposable
         }
 
         ImGui.Spacing();
+        ImGui.TextDisabled("Mini plan");
+        ImGui.Separator();
+
+        ImGui.TextWrapped(
+            "A small copy of the current slide, about the size of the minimap, for reading during " +
+            "a pull. It ignores the mouse while you're in combat, so it can't swallow a click.");
+        ImGui.Spacing();
+
+        var mode = (int)config.MiniPlanMode;
+        ImGui.SetNextItemWidth(260 * UiHelpers.Scale);
+        if (ImGui.Combo("Show it in", ref mode,
+                "Never — only /raidplan mini\0Raids, savage and ultimate\0Any duty\0Only once the pull starts\0"))
+        {
+            config.MiniPlanMode = (MiniPlanVisibility)mode;
+            Plugin.SaveConfig();
+        }
+
+        var size = config.MiniPlanSize;
+        ImGui.SetNextItemWidth(200 * UiHelpers.Scale);
+        if (ImGui.SliderFloat("Size", ref size, 120f, 420f, "%.0f px", ImGuiSliderFlags.None))
+        {
+            config.MiniPlanSize = size;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker("The game's minimap is about 220 across, for comparison.");
+
+        var opacity = config.MiniPlanOpacity;
+        ImGui.SetNextItemWidth(200 * UiHelpers.Scale);
+        if (ImGui.SliderFloat("Background", ref opacity, 0.1f, 1f, "%.2f", ImGuiSliderFlags.None))
+        {
+            config.MiniPlanOpacity = opacity;
+            Plugin.SaveConfig();
+        }
+
+        var highlight = config.MiniPlanHighlightMe;
+        if (ImGui.Checkbox("Ring my own marker", ref highlight))
+        {
+            config.MiniPlanHighlightMe = highlight;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Finds your seat on the board by your character name, or by your job when it only " +
+            "appears once in the roster. Pin a seat on the Roster tab if it picks wrong.");
+
+        var miniUnlocked = config.MiniPlanUnlocked;
+        if (ImGui.Checkbox("Keep it draggable during a pull", ref miniUnlocked))
+        {
+            config.MiniPlanUnlocked = miniUnlocked;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Off by default. Leaving it on means a click landing on the window during a mechanic " +
+            "hits the overlay instead of the game.");
+
+        ImGui.Spacing();
         ImGui.TextDisabled("Learning");
         ImGui.Separator();
 
