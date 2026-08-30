@@ -14,6 +14,29 @@ namespace RaidPlan.UI.Theme;
 /// other plugin's windows, or trips an assert deep inside ImGui frames later, and either way the
 /// cause is nowhere near the symptom.
 /// </remarks>
+/// <summary>Numbers the theme and its tests both need to agree on.</summary>
+public static class ThemeMetrics
+{
+    public static readonly Vector2 FramePadding = new(9f, 5f);
+
+    /// <summary>
+    /// How far off centre a glyph ends up inside a button, in pixels. Positive is to the right.
+    /// </summary>
+    /// <remarks>
+    /// ImGui centres a label between the frame padding, not inside the button, and it only
+    /// centres when there is slack to centre into — with none it pins the text against the
+    /// padding edge and carries on silently. That is why an icon on a square button drifts as
+    /// soon as the horizontal padding grows, and why icon buttons draw with no padding at all.
+    /// </remarks>
+    public static float GlyphOffsetFromCentre(float buttonSide, float padX, float glyphWidth)
+    {
+        var slack = buttonSide - (padX * 2f) - glyphWidth;
+        var start = padX + (slack > 0f ? slack * 0.5f : 0f);
+
+        return start + (glyphWidth * 0.5f) - (buttonSide * 0.5f);
+    }
+}
+
 public struct ThemeScope : IDisposable
 {
     private int colours;
@@ -112,7 +135,7 @@ public struct ThemeScope : IDisposable
         scope.Var(ImGuiStyleVar.PopupBorderSize, 1f);
 
         scope.Var(ImGuiStyleVar.WindowPadding, new Vector2(12f, 11f));
-        scope.Var(ImGuiStyleVar.FramePadding, new Vector2(9f, 5f));
+        scope.Var(ImGuiStyleVar.FramePadding, ThemeMetrics.FramePadding);
         scope.Var(ImGuiStyleVar.ItemSpacing, new Vector2(8f, 7f));
         scope.Var(ImGuiStyleVar.ItemInnerSpacing, new Vector2(7f, 5f));
         scope.Var(ImGuiStyleVar.CellPadding, new Vector2(7f, 5f));

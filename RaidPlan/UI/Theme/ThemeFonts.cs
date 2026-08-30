@@ -109,12 +109,20 @@ public sealed class ThemeFonts : IDisposable
         if (pushed == null)
             return false;
 
+        // ImGui centres a label inside the frame padding, not inside the button. The theme's
+        // padding is wider than the slack a square button leaves around an icon, so there is
+        // nothing left to centre into and the glyph gets pinned against the padding edge.
+        // Zero the padding for the button itself; the size passed in already accounts for it.
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, System.Numerics.Vector2.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new System.Numerics.Vector2(0.5f, 0.5f));
+
         try
         {
             pressed = ImGui.Button(FontAwesomeExtensions.ToIconString(icon) + "##" + id, size);
         }
         finally
         {
+            ImGui.PopStyleVar(2);
             pushed.Dispose();
         }
 
