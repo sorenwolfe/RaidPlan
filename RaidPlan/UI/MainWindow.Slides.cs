@@ -4,12 +4,15 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using RaidPlan.Model;
 using RaidPlan.Services;
+using RaidPlan.Services.Live;
 using RaidPlan.UI.Theme;
 
 namespace RaidPlan.UI;
 
 public sealed partial class MainWindow
 {
+    /// <summary>How much of the arena a captured waymark ring covers. Not saved; it is a one-off.</summary>
+    private float waymarkSpread = WaymarkCapture.DefaultSpread;
 
     private void DrawSlidesTab(RaidPlanDocument plan)
     {
@@ -191,6 +194,11 @@ public sealed partial class MainWindow
         var notesHeight = ImGui.GetTextLineHeightWithSpacing() + (70 * UiHelpers.Scale) +
                           (ImGui.GetStyle().ItemSpacing.Y * 3);
         var canvasArea = new Vector2(avail.X, MathF.Max(120 * UiHelpers.Scale, avail.Y - notesHeight));
+
+        canvas.LiveGuides = Plugin.Config.LivePositionGuides;
+        canvas.LivePlayers = Plugin.Config.ShowLivePositions && Plugin.Config.LivePositionsInPlanner
+            ? Plugin.Tracker.Read(plan, slide)
+            : null;
 
         if (canvas.Draw(plan, slide, canvasArea, editable: true))
             MarkDirty();
@@ -703,11 +711,73 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Copying the duty's real waymarks onto the slide, and saying plainly whether the plan and
+    /// the arena currently agree — which is the thing that decides if live positions can show.
+    /// </summary>
+    private void DrawWaymarkSettings(RaidPlanDocument plan)
+    {
+        ImGui.TextDisabled("Waymarks");
+
+        var slide = CurrentSlide;
+        var placed = FieldMarkers.Read();
+
+        ImGui.BeginDisabled(slide == null || placed.Count == 0);
+        if (ImGui.Button("Copy the arena's waymarks", new Vector2(-1, 0)) && slide != null)
+        {
+            var laid = WaymarkCapture.Layout(placed, waymarkSpread * 0.47f);
+
+            slide.Items.RemoveAll(i => i.Kind == CanvasItemKind.Waymark);
+            foreach (var mark in laid)
+            {
+                slide.Items.Add(new CanvasItem
+                {
+                    Kind = CanvasItemKind.Waymark,
+                    Text = mark.Letter,
+                    Position = mark.Board,
+                    Radius = 0.03f,
+                    Color = 0xFFFFFFFF,
+                });
+            }
+
+            MarkDirty();
+            Plugin.ChatGui.Print($"[RaidPlan] Copied {laid.Count} waymark(s) onto this slide.");
+        }
+
+        ImGui.EndDisabled();
+
+        if (placed.Count == 0)
+        {
+            ImGui.TextDisabled("No waymarks are placed in this zone.");
+        }
+        else
+        {
+            ImGui.SetNextItemWidth(-1);
+            ImGui.SliderFloat("##waymark-spread", ref waymarkSpread, 0.4f, 1f, "Covers %.0f%% of the arena",
+                ImGuiSliderFlags.None);
+        }
+
+        // The alignment readout. Without this, live positions not showing is a silent mystery.
+        var aligned = Plugin.Tracker.TryAlign(plan, CurrentSlide, out var fit);
+        if (aligned)
+        {
+            ImGui.TextColored(new Vector4(0.5f, 0.85f, 0.5f, 1f),
+                $"Lined up with the arena (±{fit.Residual * 100f:0.0}%)");
+        }
+        else if (Plugin.Tracker.Status.Length > 0)
+        {
+            ImGui.TextWrapped(Plugin.Tracker.Status);
+        }
+    }
+
     private void DrawArenaSettings(RaidPlanDocument plan)
     {
         ImGui.TextDisabled("Arena");
         ImGui.Separator();
         ImGui.TextWrapped("Nothing is selected. Click something on the arena to edit it, or set up the arena itself here.");
+        ImGui.Spacing();
+
+        DrawWaymarkSettings(plan);
         ImGui.Spacing();
 
         DrawBackdropSettings();

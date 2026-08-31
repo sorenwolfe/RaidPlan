@@ -7,6 +7,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using RaidPlan.Services;
 using RaidPlan.Services.FfLogs;
+using RaidPlan.Services.Live;
 using RaidPlan.Services.RaidPlanIo;
 using RaidPlan.UI;
 using RaidPlan.UI.Theme;
@@ -39,6 +40,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static EncounterMonitor Encounter { get; private set; } = null!;
     internal static ReminderEngine Reminders { get; private set; } = null!;
     internal static RosterResolver Roster { get; private set; } = null!;
+    internal static ArenaTracker Tracker { get; private set; } = null!;
     internal static EncounterLearner Learner { get; private set; } = null!;
     internal static SlideDirector Director { get; private set; } = null!;
     internal static FfLogsClient FfLogs { get; private set; } = null!;
@@ -80,6 +82,7 @@ public sealed class Plugin : IDalamudPlugin
         Plans = new PlanStore();
         Backdrops = new BackdropStore();
         Roster = new RosterResolver();
+        Tracker = new ArenaTracker();
 
         // Order matters here: the monitor produces the events, the learner and the reminder
         // engine consume them, and the director consumes both.

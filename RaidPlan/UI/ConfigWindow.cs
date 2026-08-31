@@ -420,6 +420,46 @@ public sealed class ConfigWindow : Window, IDisposable
             "Finds your seat on the board by your character name, or by your job when it only " +
             "appears once in the roster. Pin a seat on the Roster tab if it picks wrong.");
 
+        ImGui.Spacing();
+        ImGui.TextDisabled("Live positions");
+
+        var live = config.ShowLivePositions;
+        if (ImGui.Checkbox("Show where the party actually is", ref live))
+        {
+            config.ShowLivePositions = live;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Draws everyone's real position on the arena as a hollow ring, over the top of the " +
+            "plan. It needs the duty's waymarks placed, because they are the only thing that " +
+            "says which way round the arena is — the Slides tab says whether it has lined up.");
+
+        if (config.ShowLivePositions)
+        {
+            var guides = config.LivePositionGuides;
+            if (ImGui.Checkbox("Point me at where I should be", ref guides))
+            {
+                config.LivePositionGuides = guides;
+                Plugin.SaveConfig();
+            }
+
+            ImGui.SameLine();
+            UiHelpers.HelpMarker(
+                "A dashed line from each player to the spot the plan gives their seat, so you " +
+                "can see the move rather than work it out. It disappears once you are there.");
+
+            var inPlanner = config.LivePositionsInPlanner;
+            if (ImGui.Checkbox("In the planner as well", ref inPlanner))
+            {
+                config.LivePositionsInPlanner = inPlanner;
+                Plugin.SaveConfig();
+            }
+        }
+
+        ImGui.Spacing();
+
         var showNotes = config.MiniPlanShowNotes;
         if (ImGui.Checkbox("Show the slide's notes underneath", ref showNotes))
         {

@@ -5,6 +5,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using RaidPlan.Model;
 using RaidPlan.Services;
+using RaidPlan.Services.Live;
 
 namespace RaidPlan.UI;
 
@@ -73,6 +74,15 @@ public sealed class ArenaCanvas
     /// </summary>
     public int HighlightSlot { get; set; } = -1;
 
+    /// <summary>
+    /// Where the party actually is, on the board. Null or empty draws nothing — which is the
+    /// normal state out of a duty and whenever the arena cannot be lined up.
+    /// </summary>
+    public IReadOnlyList<ArenaTracker.LivePlayer>? LivePlayers { get; set; }
+
+    /// <summary>Draw a line from each player to the token the plan has for their seat.</summary>
+    public bool LiveGuides { get; set; } = true;
+
     public string? SelectedId { get; private set; }
 
     /// <summary>How far in the view is. 1 is the whole arena.</summary>
@@ -130,6 +140,8 @@ public sealed class ArenaCanvas
         foreach (var item in slide.Items.OrderBy(i => i.Layer).ThenBy(i => (int)i.Kind))
             DrawItem(drawList, plan, item);
 
+        DrawLivePlayers(drawList, plan, slide);
+
         drawList.PopClipRect();
 
         if (editable)
@@ -186,6 +198,93 @@ public sealed class ArenaCanvas
         }
 
         view.Pan(ImGui.GetIO().MouseDelta, viewSide);
+    }
+
+    /// <summary>
+    /// Where everyone actually is, over the top of where the plan says they should be.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately unlike a planned token: a hollow ring, smaller, no icon. The board has to
+    /// stay readable as a plan, and someone glancing at it during a mechanic must be able to tell
+    /// "this is me now" from "this is where I go" without thinking about it. The line between the
+    /// two is the whole point — it is the instruction, in a form that needs no reading.
+    /// </remarks>
+    private void DrawLivePlayers(ImDrawListPtr drawList, RaidPlanDocument plan, Slide slide)
+    {
+        var players = LivePlayers;
+        if (players == null || players.Count == 0)
+            return;
+
+        var radius = Len(0.022f);
+        if (radius < 2f)
+            return;
+
+        foreach (var player in players)
+        {
+            var at = ToScreen(player.Board);
+
+            var colour = player.SlotIndex >= 0 && player.SlotIndex < plan.Roster.Count
+                ? RoleColors.Default(plan.Roster[player.SlotIndex].Role)
+                : 0xFFCCCCCC;
+
+            if (LiveGuides && TryPlannedSpot(slide, player.SlotIndex, out var target))
+            {
+                var to = ToScreen(target);
+
+                // Only worth drawing while they are actually somewhere else. A line to a token
+                // you are standing on is noise, and every player standing right adds one.
+                if ((to - at).Length() > radius * 1.6f)
+                    DrawGuide(drawList, at, to, colour, player.IsLocal);
+            }
+
+            drawList.AddCircleFilled(at, radius, UiHelpers.WithAlpha(colour, 0.28f), 20);
+            drawList.AddCircle(at, radius, UiHelpers.WithAlpha(colour, 0.95f), 20, player.IsLocal ? 2.5f : 1.5f);
+
+            if (player.IsLocal)
+                drawList.AddCircle(at, radius + (2.5f * UiHelpers.Scale), 0xCCFFFFFF, 24, 1.5f);
+        }
+    }
+
+    /// <summary>A dashed run from where you are to where the plan wants you.</summary>
+    private static void DrawGuide(ImDrawListPtr drawList, Vector2 from, Vector2 to, uint colour, bool local)
+    {
+        var span = to - from;
+        var length = span.Length();
+        if (length < 1f)
+            return;
+
+        var step = 7f * UiHelpers.Scale;
+        var direction = span / length;
+        var shade = UiHelpers.WithAlpha(colour, local ? 0.85f : 0.35f);
+        var thickness = local ? 2f : 1.2f;
+
+        // Dashes rather than a solid line: eight solid lines across the arena reads as a mess,
+        // and the dashes still show the direction at a glance.
+        for (var travelled = 0f; travelled < length; travelled += step * 2f)
+        {
+            var a = from + (direction * travelled);
+            var b = from + (direction * MathF.Min(travelled + step, length));
+            drawList.AddLine(a, b, shade, thickness);
+        }
+    }
+
+    /// <summary>Where this seat's token sits on the slide, if it has one.</summary>
+    private static bool TryPlannedSpot(Slide slide, int slotIndex, out Vector2 position)
+    {
+        position = Vector2.Zero;
+        if (slotIndex < 0)
+            return false;
+
+        foreach (var item in slide.Items)
+        {
+            if (item.Kind == CanvasItemKind.PlayerToken && item.SlotIndex == slotIndex)
+            {
+                position = item.Position;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>A small badge while zoomed, so nobody wonders why the arena is cropped.</summary>

@@ -162,6 +162,11 @@ public sealed class MiniPlanWindow : Window, IDisposable
             ? Plugin.Roster.ResolveLocalSlot(plan)
             : -1;
 
+        canvas.LiveGuides = Plugin.Config.LivePositionGuides;
+        canvas.LivePlayers = Plugin.Config.ShowLivePositions
+            ? Plugin.Tracker.Read(plan, slide)
+            : null;
+
         // The arena is square and the panel has a hairline inset, so give the canvas the inner box.
         var inset = 3f * UiHelpers.Scale;
         ImGui.SetCursorPos(new Vector2(inset, inset));

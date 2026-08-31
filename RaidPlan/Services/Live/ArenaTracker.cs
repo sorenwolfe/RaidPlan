@@ -1,0 +1,233 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using RaidPlan.Model;
+
+namespace RaidPlan.Services.Live;
+
+/// <summary>
+/// Puts the party's real positions onto the plan's board.
+/// </summary>
+/// <remarks>
+/// The point of this is the gap between a diagram and following one. A plan can say "north-east
+/// tower" perfectly clearly and still leave a newer raider translating that into a direction on
+/// screen while something is casting at them. Showing where they are next to where the plan wants
+/// them removes the translation step.
+///
+/// It shows information, and only information the game already puts on screen: your own position,
+/// your party's, and the waymarks. It never moves anyone and never places a marker.
+/// </remarks>
+public sealed class ArenaTracker
+{
+    /// <summary>A party member, placed on the board.</summary>
+    public readonly record struct LivePlayer(
+        string Name,
+        uint JobId,
+        int SlotIndex,
+        Vector2 Board,
+        bool IsLocal);
+
+    /// <summary>
+    /// How long a solved alignment is reused before the waymarks are read again.
+    /// </summary>
+    /// <remarks>
+    /// Waymarks move when somebody places them, which is rare; player positions move constantly.
+    /// So the fit is cached and the positions are not — the dots stay smooth at frame rate while
+    /// the expensive half runs four times a second. Two windows drawing the same board also share
+    /// the one fit rather than each solving it.
+    /// </remarks>
+    private static readonly TimeSpan AlignmentLifetime = TimeSpan.FromMilliseconds(250);
+
+    private WorldAlignment cached;
+    private DateTime cachedAtUtc = DateTime.MinValue;
+    private string cachedSlideId = string.Empty;
+    private bool cachedResult;
+
+    /// <summary>Why there is nothing to draw, in words a player can act on.</summary>
+    public string Status { get; private set; } = string.Empty;
+
+    public bool Aligned { get; private set; }
+
+    /// <summary>Mean error of the last fit, as a fraction of the board.</summary>
+    public float Residual { get; private set; }
+
+    /// <summary>
+    /// Lines the board up with the arena using the waymarks as the common reference.
+    /// </summary>
+    /// <remarks>
+    /// The current slide first, because that is what is on screen; then any slide with enough
+    /// waymarks, because plenty of plans only mark up the first one and the arena has not moved.
+    /// </remarks>
+    public bool TryAlign(RaidPlanDocument plan, Slide? slide, out WorldAlignment alignment)
+    {
+        var slideId = slide?.Id ?? string.Empty;
+
+        if (slideId == cachedSlideId && DateTime.UtcNow - cachedAtUtc < AlignmentLifetime)
+        {
+            alignment = cached;
+            return cachedResult;
+        }
+
+        var result = Solve(plan, slide, out alignment);
+
+        cached = alignment;
+        cachedResult = result;
+        cachedSlideId = slideId;
+        cachedAtUtc = DateTime.UtcNow;
+
+        return result;
+    }
+
+    private bool Solve(RaidPlanDocument plan, Slide? slide, out WorldAlignment alignment)
+    {
+        alignment = default;
+        Aligned = false;
+        Residual = 0f;
+
+        var placed = FieldMarkers.Read();
+        if (placed.Count < WorldAlignment.MinimumPairs)
+        {
+            Status = "Place your waymarks in the duty to line the plan up with the arena.";
+            return false;
+        }
+
+        var drawn = DrawnWaymarks(plan, slide);
+        if (drawn == null)
+        {
+            Status = "This plan has no waymarks on it, so there is nothing to line it up by.";
+            return false;
+        }
+
+        var pairs = new List<AlignmentPair>(placed.Count);
+        foreach (var marker in placed)
+        {
+            if (drawn.TryGetValue(marker.Letter, out var board))
+                pairs.Add(new AlignmentPair(marker.World, board));
+        }
+
+        if (pairs.Count < WorldAlignment.MinimumPairs)
+        {
+            Status = $"Only {pairs.Count} waymark(s) match between the plan and the arena; " +
+                     $"{WorldAlignment.MinimumPairs} are needed.";
+            return false;
+        }
+
+        if (!WorldAlignment.TrySolve(pairs, out var solved))
+        {
+            Status = "The waymarks are all in the same place, so there is no way to tell which way round the plan goes.";
+            return false;
+        }
+
+        Residual = solved.Residual;
+
+        if (!solved.IsTrustworthy)
+        {
+            // Drawing a bad fit is worse than drawing nothing: someone walks to the wrong dot.
+            Status = "The plan's waymarks do not match the ones in the arena closely enough to be trusted.";
+            return false;
+        }
+
+        alignment = solved;
+        Aligned = true;
+        Status = string.Empty;
+        return true;
+    }
+
+    /// <summary>Where everyone actually is, on the board. Empty when it cannot be worked out.</summary>
+    public IReadOnlyList<LivePlayer> Read(RaidPlanDocument plan, Slide? slide)
+    {
+        if (!TryAlign(plan, slide, out var alignment))
+            return Array.Empty<LivePlayer>();
+
+        var localName = Plugin.ObjectTable.LocalPlayer?.Name.TextValue ?? string.Empty;
+        var players = new List<LivePlayer>(8);
+
+        foreach (var (name, jobId, world) in ReadPositions())
+        {
+            var seat = RosterResolver.MatchSeat(plan.Roster, name, jobId, -1);
+            players.Add(new LivePlayer(
+                name,
+                jobId,
+                seat,
+                alignment.ToPlan(world),
+                name.Equals(localName, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return players;
+    }
+
+    /// <summary>Names, jobs and ground positions for the party, or just you when solo.</summary>
+    private static List<(string Name, uint JobId, Vector2 World)> ReadPositions()
+    {
+        var found = new List<(string, uint, Vector2)>(8);
+
+        try
+        {
+            if (Plugin.PartyList.Length > 0)
+            {
+                for (var i = 0; i < Plugin.PartyList.Length; i++)
+                {
+                    var member = Plugin.PartyList[i];
+                    if (member == null)
+                        continue;
+
+                    found.Add((
+                        member.Name.TextValue,
+                        member.ClassJob.RowId,
+                        WorldAlignment.Ground(member.Position)));
+                }
+
+                return found;
+            }
+
+            var local = Plugin.ObjectTable.LocalPlayer;
+            if (local != null)
+            {
+                found.Add((
+                    local.Name.TextValue,
+                    local.ClassJob.RowId,
+                    WorldAlignment.Ground(local.Position)));
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Could not read party positions.");
+            found.Clear();
+        }
+
+        return found;
+    }
+
+    /// <summary>The waymarks the plan draws, by letter. Null when no slide has enough of them.</summary>
+    private static Dictionary<string, Vector2>? DrawnWaymarks(RaidPlanDocument plan, Slide? slide)
+    {
+        if (slide != null && TryCollect(slide, out var here))
+            return here;
+
+        foreach (var other in plan.Slides)
+        {
+            if (!ReferenceEquals(other, slide) && TryCollect(other, out var found))
+                return found;
+        }
+
+        return null;
+    }
+
+    private static bool TryCollect(Slide slide, out Dictionary<string, Vector2> marks)
+    {
+        marks = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in slide.Items)
+        {
+            if (item.Kind != CanvasItemKind.Waymark || string.IsNullOrEmpty(item.Text))
+                continue;
+
+            // First wins. A plan with two "A"s is already ambiguous; picking one beats guessing
+            // an average that sits between them and is right for neither.
+            marks.TryAdd(item.Text.Trim(), item.Position);
+        }
+
+        return marks.Count >= WorldAlignment.MinimumPairs;
+    }
+}

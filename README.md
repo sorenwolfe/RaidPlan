@@ -51,6 +51,17 @@ job icon, so a board reads at a glance. Hover any tool to see what it does.
 is, or use the magnifier buttons at the top. Hold the middle mouse button to drag the view around.
 The button next to them puts the whole arena back.
 
+**See where you actually are.** This is the one that helps most if you're new. Once your group
+has placed the waymarks, RaidPlan works out how the arena lines up with the plan and draws
+everyone's real position on the board as a hollow ring — with a dashed line from you to the spot
+the plan gives you. You don't have to work out which way "north-east tower" is while something is
+casting at you; you can see the move. The line disappears once you're standing right. It only
+ever *shows* you things — it never moves you and never places a marker.
+
+**Copy the arena's waymarks in one click.** On the Slides tab, **Copy the arena's waymarks** drops
+the real ones straight onto your slide, in the right shape and facing the right way. It saves
+placing eight markers by hand, and it's what makes the position display above line up properly.
+
 **Everyone gets their own instructions.** You build the plan around *positions* — MT, H2, R1 —
 not names. Give each position a job, and RaidPlan shows you that job's real spell list to pick
 from. So you can say "H2 presses Bell here", and the person playing H2 that night is the one who
@@ -165,6 +176,10 @@ guessing from the drawing, and that can come out small.
 
 **FF Logs importing won't connect.** Open settings and look at the FF Logs section — it says
 whether the key works. "Forget them" clears both boxes so you can paste a fresh pair.
+
+**Live positions aren't showing.** The Slides tab says why, in the Waymarks box. Usually it's one
+of three things: no waymarks are placed in the duty, the plan has none drawn on it, or the two
+don't match closely enough to trust. **Copy the arena's waymarks** fixes the last two at once.
 
 **Calls aren't firing.** Check `/raidplan calls` is on, and that the step is actually anchored to a
 boss cast rather than set to Manual.

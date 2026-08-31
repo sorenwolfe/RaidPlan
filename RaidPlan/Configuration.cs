@@ -156,6 +156,20 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>Icons on the drawing tools instead of text labels.</summary>
     public bool ThemeToolIcons { get; set; } = true;
 
+    // ---------------------------------------------------------------- live positions
+
+    /// <summary>
+    /// Draw the party where they actually are, over the plan. Needs the waymarks placed, since
+    /// they are the only thing that says which way round the arena is.
+    /// </summary>
+    public bool ShowLivePositions { get; set; } = true;
+
+    /// <summary>Line each player up with the spot the plan gives their seat.</summary>
+    public bool LivePositionGuides { get; set; } = true;
+
+    /// <summary>Show them in the planner too, not only in the small in-fight window.</summary>
+    public bool LivePositionsInPlanner { get; set; } = true;
+
     // ---------------------------------------------------------------- mini plan
 
     /// <summary>When the compact in-fight window appears by itself.</summary>
