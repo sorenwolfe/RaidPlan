@@ -49,6 +49,9 @@ public sealed class ArenaCanvas
     private ArenaView view = new();
     private bool panning;
 
+    /// <summary>Alpha multiplier for the item being drawn. 1 unless it belongs to someone else.</summary>
+    private float dim = 1f;
+
     private string? draggingId;
     private CanvasItem? drawingStroke;
     private Vector2 pendingStart;
@@ -82,6 +85,28 @@ public sealed class ArenaCanvas
 
     /// <summary>Draw a line from each player to the token the plan has for their seat.</summary>
     public bool LiveGuides { get; set; } = true;
+
+    /// <summary>
+    /// Play everyone but <see cref="HighlightSlot"/> down, so one instruction stands out.
+    /// </summary>
+    /// <remarks>
+    /// Only the players fade. Every shape that describes the mechanic — zones, waymarks, text —
+    /// stays exactly as it was, because that is the thing being dodged and hiding any of it to
+    /// reduce clutter would be trading the wrong way.
+    /// </remarks>
+    public bool FocusOnMe { get; set; }
+
+    /// <summary>How far the local player is from their spot, as a fraction of the board. -1 unknown.</summary>
+    public float SettleDistance { get; set; } = -1f;
+
+    /// <summary>Inside this and they count as standing on their spot.</summary>
+    public float SettleTolerance { get; set; } = 0.03f;
+
+    /// <summary>True once the local player is standing where the plan wants them.</summary>
+    public bool Settled => SettleDistance >= 0f && SettleDistance <= SettleTolerance;
+
+    /// <summary>Gold. The one colour on the board that only ever means "this is your spot".</summary>
+    public const uint TargetGold = 0xFF4FC8FF;
 
     public string? SelectedId { get; private set; }
 
@@ -131,6 +156,10 @@ public sealed class ArenaCanvas
         origin = view.BoardOrigin(viewOrigin, viewSide);
         var boardSize = new Vector2(side, side);
 
+        // Before anything is drawn: the target ring is painted with the tokens, and it needs to
+        // know whether you have arrived before it decides whether to pulse.
+        MeasureSettle(slide);
+
         var drawList = ImGui.GetWindowDrawList();
         drawList.PushClipRect(viewOrigin, viewOrigin + canvasSize, true);
 
@@ -138,7 +167,9 @@ public sealed class ArenaCanvas
         DrawArenaBackground(drawList, plan.Arena, boardSize);
 
         foreach (var item in slide.Items.OrderBy(i => i.Layer).ThenBy(i => (int)i.Kind))
-            DrawItem(drawList, plan, item);
+            DrawItem(drawList, plan, slide, item);
+
+        dim = 1f;
 
         DrawLivePlayers(drawList, plan, slide);
 
@@ -221,6 +252,11 @@ public sealed class ArenaCanvas
 
         foreach (var player in players)
         {
+            var mine = player.IsLocal || (HighlightSlot >= 0 && player.SlotIndex == HighlightSlot);
+
+            // In focus mode everyone else stays visible, just quiet enough not to compete.
+            dim = FocusOnMe && HighlightSlot >= 0 && !mine ? OtherPlayerDim : 1f;
+
             var at = ToScreen(player.Board);
 
             var colour = player.SlotIndex >= 0 && player.SlotIndex < plan.Roster.Count
@@ -234,19 +270,21 @@ public sealed class ArenaCanvas
                 // Only worth drawing while they are actually somewhere else. A line to a token
                 // you are standing on is noise, and every player standing right adds one.
                 if ((to - at).Length() > radius * 1.6f)
-                    DrawGuide(drawList, at, to, colour, player.IsLocal);
+                    DrawGuide(drawList, at, to, player.IsLocal ? TargetGold : colour, player.IsLocal);
             }
 
-            drawList.AddCircleFilled(at, radius, UiHelpers.WithAlpha(colour, 0.28f), 20);
-            drawList.AddCircle(at, radius, UiHelpers.WithAlpha(colour, 0.95f), 20, player.IsLocal ? 2.5f : 1.5f);
+            drawList.AddCircleFilled(at, radius, Fade(UiHelpers.WithAlpha(colour, 0.28f)), 20);
+            drawList.AddCircle(at, radius, Fade(UiHelpers.WithAlpha(colour, 0.95f)), 20, player.IsLocal ? 2.5f : 1.5f);
 
             if (player.IsLocal)
                 drawList.AddCircle(at, radius + (2.5f * UiHelpers.Scale), 0xCCFFFFFF, 24, 1.5f);
         }
+
+        dim = 1f;
     }
 
     /// <summary>A dashed run from where you are to where the plan wants you.</summary>
-    private static void DrawGuide(ImDrawListPtr drawList, Vector2 from, Vector2 to, uint colour, bool local)
+    private void DrawGuide(ImDrawListPtr drawList, Vector2 from, Vector2 to, uint colour, bool local)
     {
         var span = to - from;
         var length = span.Length();
@@ -255,7 +293,7 @@ public sealed class ArenaCanvas
 
         var step = 7f * UiHelpers.Scale;
         var direction = span / length;
-        var shade = UiHelpers.WithAlpha(colour, local ? 0.85f : 0.35f);
+        var shade = Fade(UiHelpers.WithAlpha(colour, local ? 0.85f : 0.35f));
         var thickness = local ? 2f : 1.2f;
 
         // Dashes rather than a solid line: eight solid lines across the arena reads as a mess,
@@ -307,6 +345,105 @@ public sealed class ArenaCanvas
     public Vector2 ToNormalised(Vector2 screen) => (screen - origin) / side;
 
     private float Len(float normalisedLength) => normalisedLength * side;
+
+    /// <summary>
+    /// How far down to play an item that belongs to somebody else.
+    /// </summary>
+    /// <remarks>
+    /// Faded, never hidden. A plan you cannot see the rest of is no longer a plan — you lose the
+    /// ability to check whether the person next to you is where they should be, and to pick your
+    /// own spot up again after a death shuffles the party round.
+    /// </remarks>
+    public const float OtherPlayerDim = 0.3f;
+
+    /// <summary>Scales a packed colour's alpha by the current dim, leaving its hue alone.</summary>
+    private uint Fade(uint colour)
+    {
+        if (dim >= 0.999f)
+            return colour;
+
+        var alpha = (colour >> 24) & 0xFF;
+        return (colour & 0x00FFFFFF) | ((uint)(alpha * dim) << 24);
+    }
+
+    /// <summary>
+    /// Whether this item is somebody else's business.
+    /// </summary>
+    /// <remarks>
+    /// Only players and the movement drawn from them. A line is somebody's if it starts on their
+    /// token; one starting nowhere near a token belongs to the mechanic and stays bright. The
+    /// default in every uncertain case is to leave it alone — dimming something the player needed
+    /// is a far worse failure than leaving one line too many at full strength.
+    /// </remarks>
+    private float DimFor(Slide slide, CanvasItem item)
+    {
+        // Nothing to focus on. Without knowing which seat is yours there is no "everyone else".
+        if (HighlightSlot < 0)
+            return 1f;
+
+        switch (item.Kind)
+        {
+            case CanvasItemKind.PlayerToken:
+                return item.SlotIndex < 0 || item.SlotIndex == HighlightSlot ? 1f : OtherPlayerDim;
+
+            case CanvasItemKind.Arrow:
+            case CanvasItemKind.Tether:
+            case CanvasItemKind.Freehand:
+            {
+                if (item.Points.Count == 0)
+                    return 1f;
+
+                var owner = TokenAt(slide, item.Points[0]);
+                return owner >= 0 && owner != HighlightSlot ? OtherPlayerDim : 1f;
+            }
+
+            default:
+                return 1f;
+        }
+    }
+
+    /// <summary>
+    /// How far the local player is from the spot the plan gives them, this frame.
+    /// </summary>
+    /// <remarks>
+    /// -1 whenever that cannot be answered — no live positions, no seat resolved, or no token for
+    /// that seat on this slide. That is not the same as being out of position, and the target ring
+    /// treats it differently: it keeps pulsing rather than claiming an arrival it cannot see.
+    /// </remarks>
+    private void MeasureSettle(Slide slide)
+    {
+        SettleDistance = -1f;
+
+        var players = LivePlayers;
+        if (players == null || HighlightSlot < 0)
+            return;
+
+        foreach (var player in players)
+        {
+            if (!player.IsLocal || player.SlotIndex != HighlightSlot)
+                continue;
+
+            if (TryPlannedSpot(slide, HighlightSlot, out var target))
+                SettleDistance = (player.Board - target).Length();
+
+            return;
+        }
+    }
+
+    /// <summary>The seat whose token sits under this point, or -1 if none does.</summary>
+    private static int TokenAt(Slide slide, Vector2 point)
+    {
+        foreach (var item in slide.Items)
+        {
+            if (item.Kind != CanvasItemKind.PlayerToken || item.SlotIndex < 0)
+                continue;
+
+            if ((item.Position - point).Length() <= MathF.Max(item.Radius, 0.02f) * 1.4f)
+                return item.SlotIndex;
+        }
+
+        return -1;
+    }
 
     // ---------------------------------------------------------------- arena
 
@@ -428,10 +565,12 @@ public sealed class ArenaCanvas
 
     // ---------------------------------------------------------------- items
 
-    private void DrawItem(ImDrawListPtr drawList, RaidPlanDocument plan, CanvasItem item)
+    private void DrawItem(ImDrawListPtr drawList, RaidPlanDocument plan, Slide slide, CanvasItem item)
     {
         var selected = item.Id == SelectedId;
         var centre = ToScreen(item.Position);
+
+        dim = FocusOnMe ? DimFor(slide, item) : 1f;
 
         switch (item.Kind)
         {
@@ -509,34 +648,57 @@ public sealed class ArenaCanvas
         if (isMe)
             DrawYouRing(drawList, centre, radius, colour);
 
-        drawList.AddCircleFilled(centre, radius, UiHelpers.WithAlpha(colour, 0.92f), 32);
-        drawList.AddCircle(centre, radius, isMe ? 0xFFFFFFFF : 0xFF101010, 32, isMe ? 2.5f : 2f);
+        drawList.AddCircleFilled(centre, radius, Fade(UiHelpers.WithAlpha(colour, 0.92f)), 32);
+        drawList.AddCircle(centre, radius, Fade(isMe ? 0xFFFFFFFF : 0xFF101010), 32, isMe ? 2.5f : 2f);
 
         // An explicit icon on the token wins, then the seat's job, then just the seat label.
         var iconId = item.IconId != 0 ? item.IconId : JobIcons.For(jobId);
 
         var half = new Vector2(radius * 0.78f, radius * 0.78f);
-        if (iconId == 0 || !UiHelpers.DrawIconAt(drawList, iconId, centre - half, centre + half, 0xFFFFFFFF))
-            UiHelpers.CenteredShadowText(drawList, centre, label, UiHelpers.ReadableTextOn(colour));
+        if (iconId == 0 || !UiHelpers.DrawIconAt(drawList, iconId, centre - half, centre + half, Fade(0xFFFFFFFF)))
+            UiHelpers.CenteredShadowText(drawList, centre, label, Fade(UiHelpers.ReadableTextOn(colour)));
         else if (radius > 18f * UiHelpers.Scale)
-            UiHelpers.CenteredShadowText(drawList, centre + new Vector2(0, radius + 7f), label, 0xFFFFFFFF);
+            UiHelpers.CenteredShadowText(drawList, centre + new Vector2(0, radius + 7f), label, Fade(0xFFFFFFFF));
     }
 
     /// <summary>
     /// The "you are here" marker. A soft halo plus a slowly breathing ring — enough to find at a
     /// glance on a busy board, calm enough not to pull the eye during a mechanic.
     /// </summary>
-    private static void DrawYouRing(ImDrawListPtr drawList, Vector2 centre, float radius, uint colour)
+    /// <summary>
+    /// Marks the spot the plan gives you. It pulses gold while you are somewhere else and goes
+    /// solid the moment you are standing on it.
+    /// </summary>
+    /// <remarks>
+    /// The pulse is the point. Something moving catches the eye in peripheral vision, which is
+    /// all the attention going spare mid-mechanic, and it stopping is a clearer "yes, there" than
+    /// any wording — you get the confirmation without reading anything or looking away from the
+    /// boss. One colour, used for nothing else on the board, so it never has to be interpreted.
+    /// </remarks>
+    private void DrawYouRing(ImDrawListPtr drawList, Vector2 centre, float radius, uint colour)
     {
-        var pulse = 0.5f + (0.5f * MathF.Sin((float)ImGui.GetTime() * 2.2f));
+        // Without live positions there is nothing to settle against, so it keeps pulsing rather
+        // than claiming you have arrived.
+        var settled = Settled;
+        var pulse = settled ? 1f : 0.5f + (0.5f * MathF.Sin((float)ImGui.GetTime() * 3.4f));
+
+        var glowAlpha = settled ? 0.42f : 0.24f + (0.20f * pulse);
+        var ringAlpha = settled ? 0.95f : 0.45f + (0.40f * pulse);
+        var ringScale = settled ? 1.30f : 1.26f + (0.13f * pulse);
 
         // The sprite gives a real falloff. Without it, fall back to a flat disc, which is the
         // best a draw list can manage on its own.
-        var halo = UiHelpers.WithAlpha(colour, 0.30f + (0.12f * pulse));
-        if (!Theme.Sprites.Glow(drawList, centre, radius * 2.6f, halo))
-            drawList.AddCircleFilled(centre, radius * 1.62f, UiHelpers.WithAlpha(colour, 0.10f + (0.06f * pulse)), 40);
+        var halo = UiHelpers.WithAlpha(TargetGold, glowAlpha);
+        if (!Theme.Sprites.Glow(drawList, centre, radius * (settled ? 2.4f : 2.6f), halo))
+            drawList.AddCircleFilled(centre, radius * 1.62f, UiHelpers.WithAlpha(TargetGold, glowAlpha * 0.35f), 40);
 
-        drawList.AddCircle(centre, radius * (1.34f + (0.07f * pulse)), UiHelpers.WithAlpha(0xFFFFFFFF, 0.45f + (0.35f * pulse)), 40, 2f);
+        drawList.AddCircle(centre, radius * ringScale, UiHelpers.WithAlpha(TargetGold, ringAlpha), 40,
+            settled ? 3f : 2f);
+
+        // A second, still ring underneath once you have arrived: unmistakably "done" next to the
+        // same mark moving a moment ago.
+        if (settled)
+            drawList.AddCircle(centre, radius * 1.52f, UiHelpers.WithAlpha(TargetGold, 0.35f), 40, 1.5f);
     }
 
     private void DrawWaymark(ImDrawListPtr drawList, CanvasItem item, Vector2 centre)
@@ -693,7 +855,7 @@ public sealed class ArenaCanvas
 
         var thickness = MathF.Max(1.5f, Len(item.Thickness));
         var points = item.Points.Select(ToScreen).ToArray();
-        drawList.AddPolyline(ref points[0], points.Length, item.Color, ImDrawFlags.None, thickness);
+        drawList.AddPolyline(ref points[0], points.Length, Fade(item.Color), ImDrawFlags.None, thickness);
 
         var tip = points[^1];
         var prev = points[^2];
@@ -710,7 +872,7 @@ public sealed class ArenaCanvas
             tip,
             tip - (dir * head) + (normal * head * 0.55f),
             tip - (dir * head) - (normal * head * 0.55f),
-            item.Color);
+            Fade(item.Color));
     }
 
     private void DrawPath(ImDrawListPtr drawList, CanvasItem item, bool closed)
@@ -720,7 +882,7 @@ public sealed class ArenaCanvas
 
         var thickness = MathF.Max(1.5f, Len(item.Thickness));
         var points = item.Points.Select(ToScreen).ToArray();
-        drawList.AddPolyline(ref points[0], points.Length, item.Color,
+        drawList.AddPolyline(ref points[0], points.Length, Fade(item.Color),
             closed ? ImDrawFlags.Closed : ImDrawFlags.None, thickness);
     }
 

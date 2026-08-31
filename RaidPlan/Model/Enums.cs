@@ -96,6 +96,9 @@ public enum ReminderChannel
     Chat = 1 << 1,
     Toast = 1 << 2,
     Sound = 1 << 3,
+
+    /// <summary>Read out loud by Windows' own speech service.</summary>
+    Speech = 1 << 4,
 }
 
 /// <summary>Which members of the party a timeline entry talks to.</summary>

@@ -51,12 +51,18 @@ job icon, so a board reads at a glance. Hover any tool to see what it does.
 is, or use the magnifier buttons at the top. Hold the middle mouse button to drag the view around.
 The button next to them puts the whole arena back.
 
+**Only your own instruction, by default.** On the small in-fight window the other seven players
+and their movement are faded down so the thing you need is the thing you see first. Nothing is
+hidden — you can still check on the person next to you — and every shape describing the mechanic
+itself stays fully lit, because that's what you're dodging. One switch in settings turns it off.
+
 **See where you actually are.** This is the one that helps most if you're new. Once your group
 has placed the waymarks, RaidPlan works out how the arena lines up with the plan and draws
 everyone's real position on the board as a hollow ring — with a dashed line from you to the spot
 the plan gives you. You don't have to work out which way "north-east tower" is while something is
-casting at you; you can see the move. The line disappears once you're standing right. It only
-ever *shows* you things — it never moves you and never places a marker.
+casting at you; you can see the move. Your spot pulses gold until you reach it, then goes solid,
+so you get the confirmation without reading anything. It only ever *shows* you things — it never
+moves you and never places a marker.
 
 **Copy the arena's waymarks in one click.** On the Slides tab, **Copy the arena's waymarks** drops
 the real ones straight onto your slide, in the right shape and facing the right way. It saves
@@ -69,8 +75,13 @@ gets told, whoever it is.
 
 **It calls things out before they happen.** A few seconds before the boss cast lands, the player
 who has a job to do gets told what to press. It can appear as a banner on screen, in your chat
-log, as a pop-up notification, with a sound, or any mix of those. Everyone chooses how loud it is
-for them — that setting is yours, not the plan's.
+log, as a pop-up notification, with a sound, **read out loud**, or any mix of those. Everyone
+chooses how loud it is for them — that setting is yours, not the plan's.
+
+**It can just tell you.** Turn on **Read out loud** in settings and RaidPlan speaks the call using
+Windows' own voice, with speed, volume and voice to choose from and a button to hear it. Worth
+trying even if you can read the banner fine — you don't have to look away from the boss to hear
+it, which is the whole problem with reading anything mid-mechanic.
 
 **The slides follow the fight on their own.** When the boss starts casting something your plan
 knows about, the plugin flips to the right slide by itself. Nobody has to click through it while
@@ -95,12 +106,13 @@ it later in settings.
 
 **A small window for during the fight.** In raids, a compact copy of the current slide appears on
 screen, about the size of your minimap. Drag it wherever you like. It shows the same slide the
-planner is on, so it keeps up with the fight by itself, and it puts a ring around *your* marker —
+planner is on, so it keeps up with the fight by itself, and it puts a gold ring around *your* spot —
 found by your character name, or by your job when it only appears once in the plan. Whatever's
 written on the slide shows underneath it, so you can read the call without opening the planner.
-While you're
-in combat it ignores the mouse completely, so it can never swallow a click meant for the game.
-Hover it out of combat to move it or close it, and `/raidplan mini` brings it back.
+While you're in combat it ignores the mouse completely, so it can never swallow a click meant for
+the game.
+Hover it out of combat to move it, drag the bottom-right corner to resize it, or close it —
+`/raidplan mini` brings it back.
 
 **It looks like it belongs there.** Dark panels, one accent colour you can change, soft shadows,
 and icons on the drawing tools. The headings use the game's own font rather than a generic one.
@@ -180,6 +192,9 @@ whether the key works. "Forget them" clears both boxes so you can paste a fresh 
 **Live positions aren't showing.** The Slides tab says why, in the Waymarks box. Usually it's one
 of three things: no waymarks are placed in the duty, the plan has none drawn on it, or the two
 don't match closely enough to trust. **Copy the arena's waymarks** fixes the last two at once.
+
+**Nothing is being read out.** Windows speech has to be present on the machine. If it isn't, the
+settings panel says so where the speed and volume controls would be.
 
 **Calls aren't firing.** Check `/raidplan calls` is on, and that the step is actually anchored to a
 boss cast rather than set to Manual.

@@ -6,6 +6,7 @@ using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using RaidPlan.Model;
+using RaidPlan.Services.Speech;
 
 namespace RaidPlan.Services;
 
@@ -64,6 +65,9 @@ public sealed class ReminderEngine : IDisposable
     private void OnCombatEnded()
     {
         pending.Clear();
+
+        // Anything still queued to be said belongs to a pull that is over.
+        Plugin.Speech.Clear();
     }
 
     private void OnUpdate(IFramework framework)
@@ -285,6 +289,11 @@ public sealed class ReminderEngine : IDisposable
         if ((team.Channels & ReminderChannel.Sound) != 0)
         {
             PlaySound(team.SoundEffectId);
+        }
+
+        if ((team.Channels & ReminderChannel.Speech) != 0)
+        {
+            Plugin.Speech.Say(SpokenText.For(headline, subline, team.SpeakOtherPlayersCalls));
         }
 
         StepFired?.Invoke(entry);

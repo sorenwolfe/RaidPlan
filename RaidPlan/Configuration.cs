@@ -37,6 +37,20 @@ public sealed class TeamProfile
     /// <summary>Chat sound effect id (1-16) used when the Sound channel is on.</summary>
     public uint SoundEffectId { get; set; } = 6;
 
+    /// <summary>Speaking rate, -10 to 10. Zero is the voice's own pace.</summary>
+    public int SpeechRate { get; set; }
+
+    public int SpeechVolume { get; set; } = 90;
+
+    /// <summary>Installed voice to use. Empty means whichever Windows has set as default.</summary>
+    public string SpeechVoice { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Read out what everyone else is pressing as well as your own line. Off: it is useful to
+    /// glance at and hard to listen to while dodging.
+    /// </summary>
+    public bool SpeakOtherPlayersCalls { get; set; }
+
     /// <summary>
     /// Fallback line used when a timeline entry has no call text of its own.
     /// Supports the same tokens as per-entry text.
@@ -68,6 +82,10 @@ public sealed class TeamProfile
             OverlayTextColor = OverlayTextColor,
             OverlayBackgroundColor = OverlayBackgroundColor,
             SoundEffectId = SoundEffectId,
+            SpeechRate = SpeechRate,
+            SpeechVolume = SpeechVolume,
+            SpeechVoice = SpeechVoice,
+            SpeakOtherPlayersCalls = SpeakOtherPlayersCalls,
             DefaultTemplate = DefaultTemplate,
             ChatPrefix = ChatPrefix,
             OnlyInDuty = OnlyInDuty,
@@ -186,6 +204,19 @@ public sealed class Configuration : IPluginConfiguration
 
     /// <summary>Ring the token belonging to this client's seat.</summary>
     public bool MiniPlanHighlightMe { get; set; } = true;
+
+    /// <summary>
+    /// Play down everyone else on the mini window so your own instruction stands out.
+    /// </summary>
+    /// <remarks>
+    /// On by default. Eight tokens and eight sets of movement is a lot to read in the second you
+    /// have; one is not. Only the players are dimmed — every shape describing the mechanic itself
+    /// stays exactly as bright, because that is what you are dodging.
+    /// </remarks>
+    public bool MiniPlanOnlyMe { get; set; } = true;
+
+    /// <summary>How far you can be from your spot and still count as standing on it, in yalms.</summary>
+    public float MiniPlanSettleYalms { get; set; } = 2.5f;
 
     /// <summary>Show the slide's notes under the arena in the mini window.</summary>
     public bool MiniPlanShowNotes { get; set; } = true;

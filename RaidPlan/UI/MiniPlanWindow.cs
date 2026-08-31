@@ -28,6 +28,10 @@ public sealed class MiniPlanWindow : Window, IDisposable
         ImGuiWindowFlags.NoScrollbar |
         ImGuiWindowFlags.NoScrollWithMouse;
 
+    /// <summary>Size limits for the arena, in unscaled pixels. The game's minimap is around 218.</summary>
+    private const float MinSize = 120f;
+    private const float MaxSize = 640f;
+
     private readonly ArenaCanvas canvas = new();
     private readonly ZoneClassifier zone = new();
 
@@ -35,6 +39,10 @@ public sealed class MiniPlanWindow : Window, IDisposable
     private bool anchorPendingSave;
     private bool dragging;
     private Vector2 dragGrab;
+    private bool resizing;
+    private bool overGrip;
+    private bool resizePendingSave;
+    private float resizeGrab;
     private string noteText = string.Empty;
     private float noteHeight;
     private ThemeScope theme;
@@ -106,9 +114,13 @@ public sealed class MiniPlanWindow : Window, IDisposable
         Flags = ignoringMouse ? BaseFlags | ImGuiWindowFlags.NoInputs : BaseFlags;
 
         if (ignoringMouse)
+        {
             dragging = false;
+            resizing = false;
+            overGrip = false;
+        }
 
-        var side = Math.Clamp(Plugin.Config.MiniPlanSize, 120f, 520f) * UiHelpers.Scale;
+        var side = Math.Clamp(Plugin.Config.MiniPlanSize, MinSize, MaxSize) * UiHelpers.Scale;
         noteText = CurrentNotes();
         noteHeight = MeasureNotes(noteText, side);
 
@@ -163,9 +175,17 @@ public sealed class MiniPlanWindow : Window, IDisposable
             : -1;
 
         canvas.LiveGuides = Plugin.Config.LivePositionGuides;
+        canvas.FocusOnMe = Plugin.Config.MiniPlanOnlyMe;
         canvas.LivePlayers = Plugin.Config.ShowLivePositions
             ? Plugin.Tracker.Read(plan, slide)
             : null;
+
+        // "Close enough" is a distance in the arena, not on the screen, so it is set in yalms and
+        // converted through the fit. Otherwise the same two steps would count as arriving in a
+        // small arena and being out of position in a large one.
+        canvas.SettleTolerance = Plugin.Tracker.Aligned
+            ? MathF.Max(0.005f, Plugin.Config.MiniPlanSettleYalms * Plugin.Tracker.BoardPerYalm)
+            : 0.03f;
 
         // The arena is square and the panel has a hairline inset, so give the canvas the inner box.
         var inset = 3f * UiHelpers.Scale;
@@ -300,7 +320,10 @@ public sealed class MiniPlanWindow : Window, IDisposable
                         mouse.X >= closeMin.X && mouse.X <= closeMax.X &&
                         mouse.Y >= closeMin.Y && mouse.Y <= closeMax.Y;
 
-        if (!dragging && hovered && !overClose && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        // Before the move, so a click in the corner resizes rather than picking the window up.
+        DrawResizeGrip(drawList, min, size, hovered, mouse);
+
+        if (!dragging && !resizing && !overGrip && hovered && !overClose && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
         {
             dragging = true;
             dragGrab = mouse - min;
@@ -314,7 +337,7 @@ public sealed class MiniPlanWindow : Window, IDisposable
                 dragging = false;
         }
 
-        if (!hovered && !dragging)
+        if (!hovered && !dragging && !resizing)
             return;
 
         var rounding = 8f * UiHelpers.Scale;
@@ -342,8 +365,80 @@ public sealed class MiniPlanWindow : Window, IDisposable
 
         if (overClose)
             UiHelpers.Tooltip("Hide the mini plan. Bring it back with /raidplan mini.");
-        else
-            UiHelpers.Tooltip("Drag to move. It stops taking clicks once the pull starts.");
+        else if (!overGrip)
+            UiHelpers.Tooltip("Drag to move, or the corner to resize. It stops taking clicks once the pull starts.");
+    }
+
+    /// <summary>
+    /// The corner grip. Dragging it sets the arena's size, which everything else follows from,
+    /// since the whole board is drawn in fractions of it.
+    /// </summary>
+    /// <remarks>
+    /// Hand-drawn and hand-dragged rather than ImGui's own, for the same reason the move and the
+    /// close box are: this window has no decoration, and the height is the arena plus however
+    /// many lines of notes the slide needs. Letting ImGui own the height would put those two in a
+    /// fight it wins every frame.
+    /// </remarks>
+    private bool DrawResizeGrip(ImDrawListPtr drawList, Vector2 min, Vector2 size, bool hovered, Vector2 mouse)
+    {
+        var grip = 14f * UiHelpers.Scale;
+        var corner = min + size;
+        var gripMin = corner - new Vector2(grip, grip);
+
+        overGrip = hovered && !dragging &&
+                   mouse.X >= gripMin.X && mouse.Y >= gripMin.Y &&
+                   mouse.X <= corner.X && mouse.Y <= corner.Y;
+
+        if (overGrip && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        {
+            resizing = true;
+            resizeGrab = Plugin.Config.MiniPlanSize - (MathF.Max(mouse.X - min.X, mouse.Y - min.Y) / UiHelpers.Scale);
+        }
+
+        if (resizing)
+        {
+            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                // Sized off whichever axis the cursor has taken further, so a diagonal drag does
+                // not feel like it is fighting the mouse.
+                var reach = MathF.Max(mouse.X - min.X, mouse.Y - min.Y) / UiHelpers.Scale;
+                var wanted = Math.Clamp(reach + resizeGrab, MinSize, MaxSize);
+
+                if (MathF.Abs(wanted - Plugin.Config.MiniPlanSize) > 0.5f)
+                {
+                    Plugin.Config.MiniPlanSize = wanted;
+                    resizePendingSave = true;
+                }
+            }
+            else
+            {
+                resizing = false;
+                if (resizePendingSave)
+                {
+                    // Saved on release, not per frame: a drag is hundreds of frames and every one
+                    // of them would be a write to disk.
+                    Plugin.SaveConfig();
+                    resizePendingSave = false;
+                }
+            }
+        }
+
+        // Three diagonal strokes, the same shape ImGui uses, so it reads as a grip on sight.
+        var shade = UiHelpers.WithAlpha(0xFFFFFFFF, overGrip || resizing ? 0.85f : 0.35f);
+        for (var i = 1; i <= 3; i++)
+        {
+            var step = grip * (i / 3.4f);
+            drawList.AddLine(
+                new Vector2(corner.X - step, corner.Y - (2f * UiHelpers.Scale)),
+                new Vector2(corner.X - (2f * UiHelpers.Scale), corner.Y - step),
+                shade,
+                1.4f);
+        }
+
+        if (overGrip && !resizing)
+            UiHelpers.Tooltip($"Drag to resize. Currently {Plugin.Config.MiniPlanSize:0} px.");
+
+        return resizing;
     }
 
     private void RememberPosition()

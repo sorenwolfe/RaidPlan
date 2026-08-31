@@ -53,6 +53,12 @@ public sealed class ArenaTracker
     public float Residual { get; private set; }
 
     /// <summary>
+    /// Board units to a yalm under the last fit, so a real distance can be turned into a
+    /// distance on the board. Zero when nothing is lined up.
+    /// </summary>
+    public float BoardPerYalm { get; private set; }
+
+    /// <summary>
     /// Lines the board up with the arena using the waymarks as the common reference.
     /// </summary>
     /// <remarks>
@@ -84,6 +90,7 @@ public sealed class ArenaTracker
         alignment = default;
         Aligned = false;
         Residual = 0f;
+        BoardPerYalm = 0f;
 
         var placed = FieldMarkers.Read();
         if (placed.Count < WorldAlignment.MinimumPairs)
@@ -130,6 +137,7 @@ public sealed class ArenaTracker
 
         alignment = solved;
         Aligned = true;
+        BoardPerYalm = solved.Scale;
         Status = string.Empty;
         return true;
     }

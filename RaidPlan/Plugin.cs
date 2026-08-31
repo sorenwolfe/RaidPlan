@@ -8,6 +8,7 @@ using Dalamud.Plugin.Services;
 using RaidPlan.Services;
 using RaidPlan.Services.FfLogs;
 using RaidPlan.Services.Live;
+using RaidPlan.Services.Speech;
 using RaidPlan.Services.RaidPlanIo;
 using RaidPlan.UI;
 using RaidPlan.UI.Theme;
@@ -41,6 +42,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static ReminderEngine Reminders { get; private set; } = null!;
     internal static RosterResolver Roster { get; private set; } = null!;
     internal static ArenaTracker Tracker { get; private set; } = null!;
+    internal static SpeechChannel Speech { get; private set; } = null!;
     internal static EncounterLearner Learner { get; private set; } = null!;
     internal static SlideDirector Director { get; private set; } = null!;
     internal static FfLogsClient FfLogs { get; private set; } = null!;
@@ -83,6 +85,7 @@ public sealed class Plugin : IDalamudPlugin
         Backdrops = new BackdropStore();
         Roster = new RosterResolver();
         Tracker = new ArenaTracker();
+        Speech = new SpeechChannel(new SapiSpeechEngine());
 
         // Order matters here: the monitor produces the events, the learner and the reminder
         // engine consume them, and the director consumes both.
@@ -264,6 +267,11 @@ public sealed class Plugin : IDalamudPlugin
 
         Safely(Director.Dispose, "shut down the slide director");
         Safely(Reminders.Dispose, "shut down the reminder engine");
+
+        // Before the windows, so a line still being spoken is cut off rather than left talking
+        // over a game the plugin has already let go of.
+        Safely(Speech.Dispose, "shut down speech");
+
         Safely(Learner.Dispose, "shut down the learner");
         Safely(Encounter.Dispose, "shut down the encounter monitor");
         Safely(FfLogs.Dispose, "close the FF Logs client");

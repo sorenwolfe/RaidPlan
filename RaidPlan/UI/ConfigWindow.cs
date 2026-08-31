@@ -125,6 +125,15 @@ public sealed class ConfigWindow : Window, IDisposable
         DrawChannelToggle(team, ReminderChannel.Chat, "Chat log");
         DrawChannelToggle(team, ReminderChannel.Toast, "Dalamud notification");
         DrawChannelToggle(team, ReminderChannel.Sound, "Sound effect");
+        DrawChannelToggle(team, ReminderChannel.Speech, "Read out loud");
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Speaks the call using Windows' own speech voice. Worth trying even if you can read " +
+            "the banner — you do not have to look away from the boss to hear it.");
+
+        if ((team.Channels & ReminderChannel.Speech) != 0)
+            DrawSpeechSettings(team);
 
         if ((team.Channels & ReminderChannel.Sound) != 0)
         {
@@ -408,6 +417,19 @@ public sealed class ConfigWindow : Window, IDisposable
             Plugin.SaveConfig();
         }
 
+        var onlyMe = config.MiniPlanOnlyMe;
+        if (ImGui.Checkbox("Just my job", ref onlyMe))
+        {
+            config.MiniPlanOnlyMe = onlyMe;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "On by default. Fades the other seven players and their movement so your own line " +
+            "is the one you see first. Nothing is hidden — you can still check on the person " +
+            "next to you, and everything describing the mechanic itself stays fully lit.");
+
         var highlight = config.MiniPlanHighlightMe;
         if (ImGui.Checkbox("Ring my own marker", ref highlight))
         {
@@ -438,6 +460,20 @@ public sealed class ConfigWindow : Window, IDisposable
 
         if (config.ShowLivePositions)
         {
+            var settle = config.MiniPlanSettleYalms;
+            ImGui.SetNextItemWidth(220 * UiHelpers.Scale);
+            if (ImGui.SliderFloat("Close enough", ref settle, 0.5f, 8f, "%.1f yalms", ImGuiSliderFlags.None))
+            {
+                config.MiniPlanSettleYalms = settle;
+                Plugin.SaveConfig();
+            }
+
+            ImGui.SameLine();
+            UiHelpers.HelpMarker(
+                "How near your spot you have to be before the gold marker stops pulsing and goes " +
+                "solid. Measured in the arena rather than on screen, so it means the same thing " +
+                "whatever size the fight is.");
+
             var guides = config.LivePositionGuides;
             if (ImGui.Checkbox("Point me at where I should be", ref guides))
             {
@@ -553,6 +589,99 @@ public sealed class ConfigWindow : Window, IDisposable
         ("Teal", Palette.Good),
         ("Amber", Palette.Attention),
     };
+
+    /// <summary>
+    /// Rate, volume and voice, plus a button that actually says something — the only honest way
+    /// to set a speaking rate is to hear it.
+    /// </summary>
+    private static void DrawSpeechSettings(TeamProfile team)
+    {
+        ImGui.Indent();
+
+        // Starting here rather than at load means a player who never turns speech on never pays
+        // for the COM object or the thread.
+        Plugin.Speech.Start();
+
+        if (!Plugin.Speech.Available)
+        {
+            ImGui.TextWrapped(Plugin.Speech.Error.Length > 0
+                ? Plugin.Speech.Error
+                : "Windows speech is not available on this machine.");
+            ImGui.Unindent();
+            return;
+        }
+
+        var changed = false;
+
+        ImGui.SetNextItemWidth(220 * UiHelpers.Scale);
+        var rate = team.SpeechRate;
+        if (ImGui.SliderInt("Speed", ref rate, -10, 10, "%d", ImGuiSliderFlags.None))
+        {
+            team.SpeechRate = rate;
+            changed = true;
+        }
+
+        ImGui.SetNextItemWidth(220 * UiHelpers.Scale);
+        var volume = team.SpeechVolume;
+        if (ImGui.SliderInt("Volume", ref volume, 0, 100, "%d%%", ImGuiSliderFlags.None))
+        {
+            team.SpeechVolume = volume;
+            changed = true;
+        }
+
+        var voices = Plugin.Speech.Voices;
+        if (voices.Count > 0)
+        {
+            var current = team.SpeechVoice.Length == 0 ? "Windows default" : team.SpeechVoice;
+            ImGui.SetNextItemWidth(300 * UiHelpers.Scale);
+            if (ImGui.BeginCombo("Voice", current, ImGuiComboFlags.None))
+            {
+                if (ImGui.Selectable("Windows default", team.SpeechVoice.Length == 0,
+                        ImGuiSelectableFlags.None, Vector2.Zero))
+                {
+                    team.SpeechVoice = string.Empty;
+                    changed = true;
+                }
+
+                foreach (var voice in voices)
+                {
+                    if (ImGui.Selectable(voice, voice == team.SpeechVoice, ImGuiSelectableFlags.None, Vector2.Zero))
+                    {
+                        team.SpeechVoice = voice;
+                        changed = true;
+                    }
+                }
+
+                ImGui.EndCombo();
+            }
+        }
+
+        var others = team.SpeakOtherPlayersCalls;
+        if (ImGui.Checkbox("Read everyone else's cooldowns too", ref others))
+        {
+            team.SpeakOtherPlayersCalls = others;
+            changed = true;
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Off by default. The list of what everyone else is pressing is quick to glance at " +
+            "and slow to listen to, and it is still talking when the mechanic lands.");
+
+        if (changed)
+        {
+            Plugin.Speech.Configure(team.SpeechRate, team.SpeechVolume, team.SpeechVoice);
+            Plugin.SaveConfig();
+        }
+
+        if (ImGui.Button("Say something", Vector2.Zero))
+        {
+            Plugin.Speech.Configure(team.SpeechRate, team.SpeechVolume, team.SpeechVoice);
+            Plugin.Speech.Say("Stack north, then spread for towers.");
+        }
+
+        ImGui.Unindent();
+    }
 
     private static void DrawChannelToggle(TeamProfile team, ReminderChannel channel, string label)
     {
