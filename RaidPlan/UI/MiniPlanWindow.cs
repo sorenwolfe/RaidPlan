@@ -28,10 +28,6 @@ public sealed class MiniPlanWindow : Window, IDisposable
         ImGuiWindowFlags.NoScrollbar |
         ImGuiWindowFlags.NoScrollWithMouse;
 
-    /// <summary>Size limits for the arena, in unscaled pixels. The game's minimap is around 218.</summary>
-    private const float MinSize = 120f;
-    private const float MaxSize = 640f;
-
     private readonly ArenaCanvas canvas = new();
     private readonly ZoneClassifier zone = new();
 
@@ -120,7 +116,7 @@ public sealed class MiniPlanWindow : Window, IDisposable
             overGrip = false;
         }
 
-        var side = Math.Clamp(Plugin.Config.MiniPlanSize, MinSize, MaxSize) * UiHelpers.Scale;
+        var side = Math.Clamp(Plugin.Config.MiniPlanSize, Configuration.MiniPlanMinSize, Configuration.MiniPlanMaxSize) * UiHelpers.Scale;
         noteText = CurrentNotes();
         noteHeight = MeasureNotes(noteText, side);
 
@@ -402,7 +398,7 @@ public sealed class MiniPlanWindow : Window, IDisposable
                 // Sized off whichever axis the cursor has taken further, so a diagonal drag does
                 // not feel like it is fighting the mouse.
                 var reach = MathF.Max(mouse.X - min.X, mouse.Y - min.Y) / UiHelpers.Scale;
-                var wanted = Math.Clamp(reach + resizeGrab, MinSize, MaxSize);
+                var wanted = Math.Clamp(reach + resizeGrab, Configuration.MiniPlanMinSize, Configuration.MiniPlanMaxSize);
 
                 if (MathF.Abs(wanted - Plugin.Config.MiniPlanSize) > 0.5f)
                 {

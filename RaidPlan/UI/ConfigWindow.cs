@@ -400,7 +400,7 @@ public sealed class ConfigWindow : Window, IDisposable
 
         var size = config.MiniPlanSize;
         ImGui.SetNextItemWidth(200 * UiHelpers.Scale);
-        if (ImGui.SliderFloat("Size", ref size, 120f, 420f, "%.0f px", ImGuiSliderFlags.None))
+        if (ImGui.SliderFloat("Size", ref size, Configuration.MiniPlanMinSize, Configuration.MiniPlanMaxSize, "%.0f px", ImGuiSliderFlags.None))
         {
             config.MiniPlanSize = size;
             Plugin.SaveConfig();
@@ -604,9 +604,11 @@ public sealed class ConfigWindow : Window, IDisposable
 
         if (!Plugin.Speech.Available)
         {
-            ImGui.TextWrapped(Plugin.Speech.Error.Length > 0
-                ? Plugin.Speech.Error
-                : "Windows speech is not available on this machine.");
+            ImGui.TextWrapped(Plugin.Speech.Starting
+                ? "Starting Windows speech..."
+                : Plugin.Speech.Error.Length > 0
+                    ? Plugin.Speech.Error
+                    : "Windows speech is not available on this machine.");
             ImGui.Unindent();
             return;
         }

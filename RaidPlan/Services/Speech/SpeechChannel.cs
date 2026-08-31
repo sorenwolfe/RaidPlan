@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
@@ -11,6 +10,11 @@ namespace RaidPlan.Services.Speech;
 /// <remarks>
 /// Speaking blocks for as long as the line takes, which is far too long to do on the frame the
 /// call fires. So calls go into a queue and one worker thread reads it.
+///
+/// The engine is created on that same worker thread and never touched from anywhere else. It is a
+/// COM object, and one created on the game's frame thread but driven from a worker is a
+/// cross-apartment call — which may work, may be slow, and may not work at all depending on how
+/// the machine has SAPI registered. Keeping it on one thread removes the question.
 ///
 /// The queue is deliberately short. A raid call is only useful in the second or two it applies to,
 /// so when calls arrive faster than they can be spoken the oldest is dropped rather than the
@@ -29,7 +33,13 @@ public sealed class SpeechChannel : IDisposable
 
     private Thread? worker;
     private volatile bool running;
-    private volatile bool started;
+    private volatile bool starting;
+    private volatile bool ready;
+
+    private int wantRate;
+    private int wantVolume = 90;
+    private string wantVoice = string.Empty;
+    private volatile bool settingsDirty;
 
     /// <summary>Lines dropped because they arrived faster than they could be said.</summary>
     public int Dropped { get; private set; }
@@ -39,32 +49,31 @@ public sealed class SpeechChannel : IDisposable
     /// <summary>Empty until something goes wrong, then why speech is not working.</summary>
     public string Error { get; private set; } = string.Empty;
 
-    /// <summary>True once the engine has started and speech can actually be heard.</summary>
-    public bool Available => started && Error.Length == 0;
+    /// <summary>True once the engine is up and speech can actually be heard.</summary>
+    public bool Available => ready;
 
-    public IReadOnlyList<string> Voices => engine.Voices;
+    /// <summary>The engine is coming up. Only for telling the player, so they see something.</summary>
+    public bool Starting => starting && !ready && Error.Length == 0;
+
+    public IReadOnlyList<string> Voices => ready ? engine.Voices : Array.Empty<string>();
 
     /// <summary>
-    /// Starts the engine and its thread. Safe to call again; only the first call does anything.
+    /// Brings the engine up, on its own thread. Safe to call every frame; only the first does
+    /// anything.
     /// </summary>
     /// <remarks>
-    /// Started on demand rather than at load, so a player who never turns speech on never pays
-    /// for a COM object and a thread they did not ask for.
+    /// Returns straight away — the engine may take a moment, and none of that happens on the
+    /// caller's thread. Anything said before it is ready is dropped rather than queued, which is
+    /// right for raid calls: a call from four seconds ago is not worth hearing now.
     /// </remarks>
-    public bool Start()
+    public void Start()
     {
         lock (gate)
         {
-            if (started || Error.Length > 0)
-                return Available;
+            if (starting)
+                return;
 
-            if (!engine.Start(out var error))
-            {
-                Error = error;
-                return false;
-            }
-
-            started = true;
+            starting = true;
             running = true;
 
             worker = new Thread(Pump)
@@ -74,20 +83,27 @@ public sealed class SpeechChannel : IDisposable
             };
 
             worker.Start();
-            return true;
         }
     }
 
+    /// <summary>Remembers the rate, volume and voice, and has the worker apply them.</summary>
     public void Configure(int rate, int volume, string voiceName)
     {
-        if (started)
-            engine.Configure(rate, volume, voiceName);
+        lock (gate)
+        {
+            wantRate = rate;
+            wantVolume = volume;
+            wantVoice = voiceName ?? string.Empty;
+        }
+
+        settingsDirty = true;
+        Wake();
     }
 
-    /// <summary>Queues a line. Does nothing at all if speech never started.</summary>
+    /// <summary>Queues a line. Does nothing at all if speech is not up.</summary>
     public void Say(string text)
     {
-        if (!Available || string.IsNullOrWhiteSpace(text))
+        if (!ready || string.IsNullOrWhiteSpace(text))
             return;
 
         lock (gate)
@@ -101,13 +117,13 @@ public sealed class SpeechChannel : IDisposable
             queue.Enqueue(text.Trim());
         }
 
-        signal.Release();
+        Wake();
     }
 
     /// <summary>Drops anything waiting and cuts off whatever is being said. For a wipe.</summary>
     public void Clear()
     {
-        if (!started)
+        if (!ready)
             return;
 
         lock (gate)
@@ -116,8 +132,30 @@ public sealed class SpeechChannel : IDisposable
         engine.Stop();
     }
 
+    private void Wake()
+    {
+        try
+        {
+            signal.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Shutting down.
+        }
+    }
+
     private void Pump()
     {
+        if (!engine.Start(out var error))
+        {
+            Error = error.Length > 0 ? error : "Speech could not be started.";
+            running = false;
+            return;
+        }
+
+        ApplySettings();
+        ready = true;
+
         while (running)
         {
             try
@@ -132,6 +170,9 @@ public sealed class SpeechChannel : IDisposable
             if (!running)
                 return;
 
+            if (settingsDirty)
+                ApplySettings();
+
             string? line = null;
             lock (gate)
             {
@@ -144,36 +185,43 @@ public sealed class SpeechChannel : IDisposable
         }
     }
 
+    private void ApplySettings()
+    {
+        int rate, volume;
+        string voice;
+
+        lock (gate)
+        {
+            rate = wantRate;
+            volume = wantVolume;
+            voice = wantVoice;
+        }
+
+        settingsDirty = false;
+        engine.Configure(rate, volume, voice);
+    }
+
     public void Dispose()
     {
         // Order matters. Stop the loop, cut off the line being spoken so the worker is not stuck
         // inside the engine, wake it so it can see it should leave, then wait — and only then
         // take the engine away from under it.
         running = false;
+        ready = false;
 
         lock (gate)
             queue.Clear();
 
-        if (started)
-        {
-            try
-            {
-                engine.Stop();
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.Warning(ex, "Could not stop speech on unload.");
-            }
-        }
-
         try
         {
-            signal.Release();
+            engine.Stop();
         }
-        catch (ObjectDisposedException)
+        catch (Exception ex)
         {
-            // Already gone.
+            Plugin.Log.Warning(ex, "Could not stop speech on unload.");
         }
+
+        Wake();
 
         if (worker != null && worker.IsAlive)
             worker.Join(TimeSpan.FromSeconds(2));
@@ -182,6 +230,6 @@ public sealed class SpeechChannel : IDisposable
 
         engine.Dispose();
         signal.Dispose();
-        started = false;
+        starting = false;
     }
 }

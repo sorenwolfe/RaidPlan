@@ -220,6 +220,13 @@ public sealed class ReminderEngine : IDisposable
         if (team.OnlyInDuty && !Plugin.Condition[ConditionFlag.BoundByDuty])
             return false;
 
+        // Speech has to be brought up by whoever is going to use it. It used to be started by the
+        // settings panel alone, which meant it worked while you were setting it up and was silent
+        // in every session afterwards where you never opened settings — the queue was perfect and
+        // nothing was ever put in it. Starting is idempotent and returns immediately.
+        if ((team.Channels & ReminderChannel.Speech) != 0)
+            Plugin.Speech.Start();
+
         return true;
     }
 

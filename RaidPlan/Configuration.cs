@@ -193,7 +193,18 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>When the compact in-fight window appears by itself.</summary>
     public MiniPlanVisibility MiniPlanMode { get; set; } = MiniPlanVisibility.RaidContent;
 
-    /// <summary>Width of the mini plan in unscaled pixels. The game's minimap is around 218.</summary>
+    /// <summary>
+    /// Size limits for the mini plan, in unscaled pixels. The game's minimap is around 218.
+    /// </summary>
+    /// <remarks>
+    /// One pair, used by the settings slider, the corner grip and the window itself. They were
+    /// three separate pairs of numbers, so dragging the corner past what the slider allowed left
+    /// a window at a size the slider would snap away the next time it was opened.
+    /// </remarks>
+    public const float MiniPlanMinSize = 120f;
+    public const float MiniPlanMaxSize = 640f;
+
+    /// <summary>Width of the mini plan in unscaled pixels.</summary>
     public float MiniPlanSize { get; set; } = 220f;
 
     /// <summary>Where it sits, as a fraction of the viewport, so it survives a resolution change.</summary>
