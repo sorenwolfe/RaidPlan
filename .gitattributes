@@ -1,14 +1,18 @@
-# Normalise line endings in the repository; check out whatever the platform prefers.
+# Line endings normalised in the repository, native in the working copy. Without this a Windows
+# checkout warns about every file on the first `git add`.
 * text=auto
 
-*.cs     text diff=csharp
-*.csproj text
-*.sln    text eol=crlf
-*.md     text
-*.json   text
-*.yml    text
+*.png binary
+*.jpg binary
+*.zip binary
+*.ttf binary
+*.otf binary
 
-*.png  binary
-*.zip  binary
-*.dll  binary
-*.ico  binary
+# Artwork is excluded from `git archive`, so a source zip cannot carry an icon.
+#
+# This is here because it already went wrong once: a handoff zip containing a placeholder icon was
+# unpacked over the repository and silently replaced the real one. The repository is the only place
+# the icon lives; an archive has no business shipping a copy that can overwrite it.
+images export-ignore
+images/** export-ignore
+.gitattributes export-ignore

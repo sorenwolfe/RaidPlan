@@ -45,7 +45,7 @@ jobs:
       # Build the project, not the solution. The solution only has x64 configurations, which moves
       # the output to bin\x64\Release and makes the artifact path a guessing game.
       - name: Build
-        run: dotnet build RaidPlan/RaidPlan.csproj --configuration Release -p:Version=${{ steps.version.outputs.version }}
+        run: dotnet build Shikari/Shikari.csproj --configuration Release -p:Version=${{ steps.version.outputs.version }}
 
       # DalamudPackager builds the installable archive itself during a Release build. Find it
       # rather than assuming where it landed.
@@ -53,17 +53,17 @@ jobs:
         id: archive
         shell: pwsh
         run: |
-          $found = Get-ChildItem -Path "RaidPlan\bin" -Recurse -Filter "latest.zip" -ErrorAction SilentlyContinue
+          $found = Get-ChildItem -Path "Shikari\bin" -Recurse -Filter "latest.zip" -ErrorAction SilentlyContinue
           if (-not $found) {
             Write-Host "Build output tree:"
-            Get-ChildItem -Path "RaidPlan\bin" -Recurse -Depth 3 | ForEach-Object { Write-Host "  $($_.FullName)" }
+            Get-ChildItem -Path "Shikari\bin" -Recurse -Depth 3 | ForEach-Object { Write-Host "  $($_.FullName)" }
             throw "DalamudPackager produced no latest.zip."
           }
           if ($found.Count -gt 1) {
             $found = $found | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           }
           $zip = $found.FullName
-          $manifest = Join-Path $found.Directory.FullName "RaidPlan.json"
+          $manifest = Join-Path $found.Directory.FullName "Shikari.json"
           "zip=$zip"           | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "manifest=$manifest" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Archive: $zip"
@@ -81,7 +81,7 @@ jobs:
           Write-Host "Archive contains:"
           $names | ForEach-Object { Write-Host "  $_" }
 
-          foreach ($required in @('RaidPlan.dll', 'RaidPlan.json')) {
+          foreach ($required in @('Shikari.dll', 'Shikari.json')) {
             if ($names -notcontains $required) { throw "$required missing from the archive root." }
           }
           if ($names -contains 'latest.zip') { throw "Archive contains an archive." }
@@ -100,13 +100,13 @@ jobs:
 
       # Fixed asset name keeps the download URL in repo.json stable across releases.
       - name: Name the archive
-        run: Copy-Item "${{ steps.archive.outputs.zip }}" "RaidPlan.zip"
+        run: Copy-Item "${{ steps.archive.outputs.zip }}" "Shikari.zip"
 
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            RaidPlan.zip
+            Shikari.zip
             ${{ steps.archive.outputs.manifest }}
           generate_release_notes: true
 

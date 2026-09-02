@@ -141,12 +141,12 @@ jobs:
           "DALAMUD_HOME=$env:RUNNER_TEMP\dalamud" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build
-        run: dotnet build RaidPlan/RaidPlan.csproj --configuration Release
+        run: dotnet build Shikari/Shikari.csproj --configuration Release
 
       - name: Check the archive
         shell: pwsh
         run: |
-          $found = Get-ChildItem -Path "RaidPlan\bin" -Recurse -Filter "latest.zip" -ErrorAction SilentlyContinue |
+          $found = Get-ChildItem -Path "Shikari\bin" -Recurse -Filter "latest.zip" -ErrorAction SilentlyContinue |
                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $found) { throw "DalamudPackager produced no latest.zip." }
 
@@ -155,11 +155,11 @@ jobs:
           $names = $archive.Entries | ForEach-Object { $_.FullName }
           $archive.Dispose()
 
-          foreach ($required in @('RaidPlan.dll', 'RaidPlan.json')) {
+          foreach ($required in @('Shikari.dll', 'Shikari.json')) {
             if ($names -notcontains $required) { throw "$required missing from the archive root." }
           }
 
-          $built = Get-Content (Join-Path $found.Directory.FullName "RaidPlan.json") -Raw | ConvertFrom-Json
+          $built = Get-Content (Join-Path $found.Directory.FullName "Shikari.json") -Raw | ConvertFrom-Json
           $repo  = (Get-Content "repo.json" -Raw | ConvertFrom-Json)[0]
 
           foreach ($field in @('IconUrl', 'RepoUrl', 'DownloadLinkInstall')) {
@@ -181,6 +181,6 @@ jobs:
       - name: Upload plugin
         uses: actions/upload-artifact@v4
         with:
-          name: RaidPlan
+          name: Shikari
           path: ${{ steps.check.outputs.dir }}
           if-no-files-found: error
