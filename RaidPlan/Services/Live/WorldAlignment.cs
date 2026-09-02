@@ -77,6 +77,28 @@ public readonly struct WorldAlignment
             (Scale * ((world.X * Sin) + (world.Y * Cos))) + Offset.Y);
     }
 
+    /// <summary>
+    /// A board position back out into the world, so the plan can be drawn on the arena floor.
+    /// </summary>
+    /// <remarks>
+    /// The exact inverse of <see cref="ToPlan"/>: undo the shift, undo the scale, turn the other
+    /// way. Worth being the inverse rather than a second fit — solving world-from-plan separately
+    /// would give two transforms that disagree slightly, and a dot on the board that does not
+    /// quite match the circle on the ground is exactly the sort of thing that makes someone
+    /// distrust both.
+    /// </remarks>
+    public Vector2 ToWorld(Vector2 plan)
+    {
+        if (!IsValid || Scale <= 0f)
+            return Vector2.Zero;
+
+        var shifted = (plan - Offset) / Scale;
+
+        return new Vector2(
+            (shifted.X * Cos) + (shifted.Y * Sin),
+            (shifted.Y * Cos) - (shifted.X * Sin));
+    }
+
     /// <summary>Drops the height axis. FFXIV's ground plane is X and Z; Y is up.</summary>
     public static Vector2 Ground(Vector3 position) => new(position.X, position.Z);
 

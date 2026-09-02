@@ -7,6 +7,8 @@ using RaidPlan.Model;
 using RaidPlan.Services;
 using RaidPlan.UI.Theme;
 
+using RaidPlan.UI.World;
+
 namespace RaidPlan.UI;
 
 /// <summary>Team profiles and delivery settings.</summary>
@@ -441,6 +443,43 @@ public sealed class ConfigWindow : Window, IDisposable
         UiHelpers.HelpMarker(
             "Finds your seat on the board by your character name, or by your job when it only " +
             "appears once in the roster. Pin a seat on the Roster tab if it picks wrong.");
+
+        ImGui.Spacing();
+        ImGui.TextDisabled("On the arena floor");
+
+        var onFloor = config.ShowArenaSpot;
+        if (ImGui.Checkbox("Draw my spot on the ground", ref onFloor))
+        {
+            config.ShowArenaSpot = onFloor;
+            Plugin.SaveConfig();
+        }
+
+        ImGui.SameLine();
+        UiHelpers.HelpMarker(
+            "Puts the spot this slide gives you on the arena itself, as a gold circle that " +
+            "breathes until you are standing in it and then goes solid. Only yours — eight of " +
+            "them would be a diagram on the floor rather than a hint. Needs the waymarks placed, " +
+            "same as the live positions, and draws nothing at all if they do not line up.");
+
+        if (config.ShowArenaSpot)
+        {
+            var spot = config.ArenaSpotYalms;
+            ImGui.SetNextItemWidth(220 * UiHelpers.Scale);
+            if (ImGui.SliderFloat("Spot size", ref spot,
+                    ArenaOverlay.MinimumRadius, 8f, "%.1f yalms", ImGuiSliderFlags.None))
+            {
+                config.ArenaSpotYalms = spot;
+                Plugin.SaveConfig();
+            }
+
+            ImGui.SameLine();
+            UiHelpers.HelpMarker(
+                "How big the circle is, and how close counts as being in it — one number, because " +
+                "two would eventually disagree and you would be told you were out of a circle you " +
+                "were visibly standing in.");
+
+            ImGui.TextDisabled("  " + Plugin.ArenaSpot.Status);
+        }
 
         ImGui.Spacing();
         ImGui.TextDisabled("Live positions");

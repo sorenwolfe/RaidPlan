@@ -11,6 +11,7 @@ using RaidPlan.Services.Live;
 using RaidPlan.Services.Speech;
 using RaidPlan.Services.RaidPlanIo;
 using RaidPlan.UI;
+using RaidPlan.UI.World;
 using RaidPlan.UI.Theme;
 
 namespace RaidPlan;
@@ -33,6 +34,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static INotificationManager Notifications { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
 
     internal static Configuration Config { get; private set; } = null!;
     internal static ActionIndex Actions { get; private set; } = null!;
@@ -42,6 +44,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static ReminderEngine Reminders { get; private set; } = null!;
     internal static RosterResolver Roster { get; private set; } = null!;
     internal static ArenaTracker Tracker { get; private set; } = null!;
+    internal static ArenaOverlay ArenaSpot { get; private set; } = null!;
     internal static SpeechChannel Speech { get; private set; } = null!;
     internal static EncounterLearner Learner { get; private set; } = null!;
     internal static SlideDirector Director { get; private set; } = null!;
@@ -85,6 +88,7 @@ public sealed class Plugin : IDalamudPlugin
         Backdrops = new BackdropStore();
         Roster = new RosterResolver();
         Tracker = new ArenaTracker();
+        ArenaSpot = new ArenaOverlay();
         Speech = new SpeechChannel(new SapiSpeechEngine());
 
         // Order matters here: the monitor produces the events, the learner and the reminder
@@ -256,6 +260,7 @@ public sealed class Plugin : IDalamudPlugin
         // without consequence; these five are Dalamud's and must come off no matter what.
         Safely(() => CommandManager.RemoveHandler(CommandName), "remove " + CommandName);
         Safely(() => CommandManager.RemoveHandler(CommandAlias), "remove " + CommandAlias);
+        Safely(() => ArenaSpot?.Dispose(), "detach the arena spot");
         Safely(() => PluginInterface.UiBuilder.Draw -= WindowSystem.Draw, "detach the draw hook");
         Safely(() => PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfig, "detach the config button");
         Safely(() => PluginInterface.UiBuilder.OpenMainUi -= ToggleMain, "detach the main button");

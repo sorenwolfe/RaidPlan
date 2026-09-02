@@ -229,6 +229,17 @@ public sealed class Configuration : IPluginConfiguration
     /// <summary>How far you can be from your spot and still count as standing on it, in yalms.</summary>
     public float MiniPlanSettleYalms { get; set; } = 2.5f;
 
+    /// <summary>Whether your own spot from the current slide is drawn on the arena floor.</summary>
+    public bool ShowArenaSpot { get; set; } = true;
+
+    /// <summary>How big that circle is, in yalms.</summary>
+    /// <remarks>
+    /// A radius rather than a tolerance: this is the area the plan means, so it is the area drawn
+    /// and the area that counts as standing in it. Two numbers for one idea is how they end up
+    /// disagreeing.
+    /// </remarks>
+    public float ArenaSpotYalms { get; set; } = 2f;
+
     /// <summary>Show the slide's notes under the arena in the mini window.</summary>
     public bool MiniPlanShowNotes { get; set; } = true;
 
