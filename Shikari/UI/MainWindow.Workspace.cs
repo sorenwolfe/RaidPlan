@@ -14,6 +14,8 @@ public sealed partial class MainWindow
     private int workspace;
     private int planTool;
     private readonly ArenaCanvas liveCanvas = new();
+    private readonly NavigationMotion navigationMotion = new();
+    private readonly Vector2[] navigationRanges = new Vector2[3];
     private readonly List<string> undoEdits = new();
     private readonly List<string> redoEdits = new();
     private string historyPlanId = string.Empty;
@@ -212,16 +214,23 @@ public sealed partial class MainWindow
         // while the optional session readout yields first when the window gets narrow.
         ImGui.SameLine(0, 24 * scale);
         var buttonHeight = MathF.Max(32 * scale, ImGui.GetFrameHeight());
-        ImGui.SetCursorPosY(startY + MathF.Max(0, (headerHeight - buttonHeight) * 0.5f));
+        var navigationY = startY + MathF.Max(0, (headerHeight - buttonHeight) * 0.5f);
+        var navigationX = ImGui.GetCursorPosX();
+        var position = navigationMotion.Position;
         var labels = new[] { "Plan", "Live", "Review" };
         for (var i = 0; i < labels.Length; i++)
         {
             if (i > 0) ImGui.SameLine(0, 6 * scale);
+            // SameLine restores the previous line's Y. Set every item to the shared baseline,
+            // not just Plan, or the following buttons inherit the logo's taller line.
+            ImGui.SetCursorPosY(navigationY);
             var selected = workspace == i;
             var styled = Plugin.Config.ThemeEnabled;
             if (styled)
             {
-                ImGui.PushStyleColor(ImGuiCol.Button, Palette.Vec(selected ? Palette.Accent : Palette.PanelRaised, selected ? 0.20f : 1f));
+                var weight = Math.Clamp(1f - MathF.Abs(position - i), 0, 1);
+                ImGui.PushStyleColor(ImGuiCol.Button, Vector4.Lerp(Palette.Vec(Palette.PanelRaised),
+                    Palette.Vec(Palette.Accent, 0.20f), weight));
                 ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Palette.Vec(Palette.Accent, 0.30f));
                 ImGui.PushStyleColor(ImGuiCol.ButtonActive, Palette.Vec(Palette.Accent, 0.42f));
                 ImGui.PushStyleColor(ImGuiCol.Text, Palette.Vec(selected ? Palette.Text : Palette.TextMuted));
@@ -229,14 +238,19 @@ public sealed partial class MainWindow
             var width = MathF.Max(76 * scale, ImGui.CalcTextSize(labels[i]).X + 28 * scale);
             if (ImGui.Button(labels[i] + "##studio-navigation", new Vector2(width, buttonHeight))) workspace = i;
             if (styled) ImGui.PopStyleColor(4);
-            if (selected)
-            {
-                var min = ImGui.GetItemRectMin();
-                var max = ImGui.GetItemRectMax();
-                draw.AddLine(new Vector2(min.X + 10 * scale, max.Y - 1), new Vector2(max.X - 10 * scale, max.Y - 1),
-                    styled ? Palette.Pack(Palette.Accent) : ImGui.GetColorU32(ImGuiCol.Text), 2 * scale);
-            }
+            navigationRanges[i] = new Vector2(ImGui.GetItemRectMin().X, ImGui.GetItemRectMax().X)
+                - new Vector2(ImGui.GetWindowPos().X + navigationX);
         }
+        // Animate in local coordinates so moving/resizing the window never leaves a trail.
+        position = navigationMotion.Update(workspace, ImGui.GetIO().DeltaTime);
+        var lower = Math.Clamp((int)MathF.Floor(position), 0, 2);
+        var upper = Math.Min(lower + 1, 2);
+        var range = Vector2.Lerp(navigationRanges[lower], navigationRanges[upper], position - lower)
+            + new Vector2(ImGui.GetWindowPos().X + navigationX);
+        var underlineY = ImGui.GetItemRectMax().Y - 1;
+        var underlineColor = Plugin.Config.ThemeEnabled ? Palette.Pack(Palette.Accent) : ImGui.GetColorU32(ImGuiCol.Text);
+        draw.AddLine(new Vector2(range.X + 10 * scale, underlineY), new Vector2(range.Y - 10 * scale, underlineY),
+            underlineColor, 2 * scale);
         var navigationRight = ImGui.GetItemRectMax().X - ImGui.GetWindowPos().X;
         var statusWidth = MathF.Max(180 * scale, ImGui.CalcTextSize($"{plan.Slides.Count} slides  /  {plan.Timeline.Count} mechanics").X);
         if (rightEdge - navigationRight > statusWidth + 24 * scale)
