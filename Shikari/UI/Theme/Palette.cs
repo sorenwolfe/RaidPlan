@@ -9,20 +9,20 @@ namespace Shikari.UI.Theme;
 /// </summary>
 public static class Palette
 {
-    public const uint Window = 0x0B1217;
-    public const uint Panel = 0x111D24;
-    public const uint PanelRaised = 0x192A33;
-    public const uint Hover = 0x243E48;
-    public const uint Pressed = 0x0E121A;
+    public const uint Window = 0x09090B;
+    public const uint Panel = 0x111113;
+    public const uint PanelRaised = 0x1B1B1F;
+    public const uint Hover = 0x302125;
+    public const uint Pressed = 0x211216;
 
-    public const uint Text = 0xE8ECF4;
-    public const uint TextMuted = 0x93A0B8;
-    public const uint TextDim = 0x9BAAB5;
+    public const uint Text = 0xF5F5F6;
+    public const uint TextMuted = 0xB3B3BA;
+    public const uint TextDim = 0x98989F;
 
-    public const uint DefaultAccent = 0x6DE2CD;
+    public const uint DefaultAccent = 0xEF4054;
     public const uint Attention = 0xFFB74A;
-    public const uint Good = 0x3FD8C0;
-    public const uint Danger = 0xFF6B7A;
+    public const uint Good = 0xE1E1E6;
+    public const uint Danger = 0xFF6474;
 
     /// <summary>Packs 0xRRGGBB plus an alpha into the 0xAABBGGRR ImGui wants.</summary>
     public static uint Pack(uint rgb, float alpha)

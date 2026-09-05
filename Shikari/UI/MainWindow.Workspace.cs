@@ -27,17 +27,7 @@ public sealed partial class MainWindow
     private void DrawWorkspace(PlanDocument plan)
     {
         DrawStudioIdentity(plan);
-        ImGui.Spacing();
-        var width = MathF.Max(80, (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X * 2) / 3);
-        var labels = new[] { "01   Plan", "02   Live", "03   Review" };
-        for (var i = 0; i < labels.Length; i++)
-        {
-            if (i > 0) ImGui.SameLine();
-            var selected = workspace == i;
-            if (selected) ImGui.PushStyleColor(ImGuiCol.Button, Palette.Vec(Palette.Accent, 0.27f));
-            if (ImGui.Button(labels[i], new Vector2(width, ImGui.GetFrameHeight() * 1.25f))) workspace = i;
-            if (selected) ImGui.PopStyleColor();
-        }
+        ImGui.Separator();
         ImGui.Spacing();
         if (workspace == 2) { DrawReviewWorkspace(); return; }
         if (workspace == 1) { DrawLiveWorkspace(plan); return; }
@@ -194,9 +184,13 @@ public sealed partial class MainWindow
         frameBefore = JsonConvert.SerializeObject(plan);
     }
 
-    private static void DrawStudioIdentity(PlanDocument plan)
+    private void DrawStudioIdentity(PlanDocument plan)
     {
         var scale = UiHelpers.Scale;
+        var startY = ImGui.GetCursorPosY();
+        var rightEdge = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X;
+        var headerHeight = MathF.Max(40 * scale, ImGui.GetTextLineHeightWithSpacing() * 2);
+        ImGui.BeginGroup();
         var origin = ImGui.GetCursorScreenPos();
         var draw = ImGui.GetWindowDrawList();
         var centre = origin + new Vector2(19, 20) * scale;
@@ -207,21 +201,55 @@ public sealed partial class MainWindow
         draw.AddLine(centre + new Vector2(radius, 0), centre + new Vector2(0, radius), ink, 1.5f * scale);
         draw.AddLine(centre + new Vector2(0, radius), centre - new Vector2(radius, 0), ink, 1.5f * scale);
         draw.AddCircleFilled(centre, 3f * scale, ink, 12);
-        ImGui.Dummy(new Vector2(45, 40) * scale);
+        ImGui.Dummy(new Vector2(45 * scale, headerHeight));
         ImGui.SameLine();
         ImGui.BeginGroup();
         using (Plugin.Fonts.PushTitle()) ImGui.TextUnformatted("S H I K A R I");
         ImGui.TextColored(Palette.Vec(Palette.TextMuted), "RAID STRATEGY STUDIO");
         ImGui.EndGroup();
-        if (ImGui.GetContentRegionAvail().X > 420 * scale)
+
+        // Navigation shares the identity row. Its width follows the actual font metrics,
+        // while the optional session readout yields first when the window gets narrow.
+        ImGui.SameLine(0, 24 * scale);
+        var buttonHeight = MathF.Max(32 * scale, ImGui.GetFrameHeight());
+        ImGui.SetCursorPosY(startY + MathF.Max(0, (headerHeight - buttonHeight) * 0.5f));
+        var labels = new[] { "Plan", "Live", "Review" };
+        for (var i = 0; i < labels.Length; i++)
+        {
+            if (i > 0) ImGui.SameLine(0, 6 * scale);
+            var selected = workspace == i;
+            var styled = Plugin.Config.ThemeEnabled;
+            if (styled)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, Palette.Vec(selected ? Palette.Accent : Palette.PanelRaised, selected ? 0.20f : 1f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Palette.Vec(Palette.Accent, 0.30f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonActive, Palette.Vec(Palette.Accent, 0.42f));
+                ImGui.PushStyleColor(ImGuiCol.Text, Palette.Vec(selected ? Palette.Text : Palette.TextMuted));
+            }
+            var width = MathF.Max(76 * scale, ImGui.CalcTextSize(labels[i]).X + 28 * scale);
+            if (ImGui.Button(labels[i] + "##studio-navigation", new Vector2(width, buttonHeight))) workspace = i;
+            if (styled) ImGui.PopStyleColor(4);
+            if (selected)
+            {
+                var min = ImGui.GetItemRectMin();
+                var max = ImGui.GetItemRectMax();
+                draw.AddLine(new Vector2(min.X + 10 * scale, max.Y - 1), new Vector2(max.X - 10 * scale, max.Y - 1),
+                    styled ? Palette.Pack(Palette.Accent) : ImGui.GetColorU32(ImGuiCol.Text), 2 * scale);
+            }
+        }
+        var navigationRight = ImGui.GetItemRectMax().X - ImGui.GetWindowPos().X;
+        var statusWidth = MathF.Max(180 * scale, ImGui.CalcTextSize($"{plan.Slides.Count} slides  /  {plan.Timeline.Count} mechanics").X);
+        if (rightEdge - navigationRight > statusWidth + 24 * scale)
         {
             ImGui.SameLine();
-            ImGui.SetCursorPosX(ImGui.GetWindowSize().X - ImGui.GetStyle().WindowPadding.X - 200 * scale);
+            ImGui.SetCursorPosX(rightEdge - statusWidth);
+            ImGui.SetCursorPosY(startY);
             ImGui.BeginGroup();
             ImGui.TextColored(Palette.Vec(Plugin.Encounter.InCombat ? Palette.Good : Palette.TextMuted),
                 Plugin.Encounter.InCombat ? "LIVE SESSION" : "BETWEEN PULLS");
             ImGui.TextDisabled($"{plan.Slides.Count} slides  /  {plan.Timeline.Count} mechanics");
             ImGui.EndGroup();
         }
+        ImGui.EndGroup();
     }
 }

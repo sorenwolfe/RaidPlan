@@ -93,7 +93,7 @@ public struct ThemeScope : IDisposable
 
         // ---- title bar
         scope.Colour(ImGuiCol.TitleBg, Palette.Vec(Palette.Panel));
-        scope.Colour(ImGuiCol.TitleBgActive, Palette.Vec(0x19212F));
+        scope.Colour(ImGuiCol.TitleBgActive, Palette.Vec(Palette.PanelRaised));
         scope.Colour(ImGuiCol.TitleBgCollapsed, Palette.Vec(Palette.Window, 0.8f));
 
         // ---- separators and grips
