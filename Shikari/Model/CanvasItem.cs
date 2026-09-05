@@ -15,6 +15,9 @@ namespace Shikari.Model;
 /// </remarks>
 public sealed class CanvasItem
 {
+    /// <summary>FFXIV danger orange #FFAC2980 (RGBA), packed as ABGR for ImGui.</summary>
+    public const uint DefaultAoeColor = 0x8029ACFF;
+
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
     [DefaultValue(CanvasItemKind.PlayerToken)]

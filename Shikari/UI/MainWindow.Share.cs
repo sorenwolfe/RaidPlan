@@ -20,6 +20,7 @@ public sealed partial class MainWindow
         ImGui.Spacing();
         ImGui.TextDisabled("Export");
         ImGui.Separator();
+        ImGui.TextDisabled("Compact codes require an updated Shikari. Older codes can still be imported.");
 
         if (ImGui.Button("Copy share code to clipboard", Vector2.Zero))
         {
@@ -63,6 +64,7 @@ public sealed partial class MainWindow
         ImGui.Separator();
 
         ImGui.TextUnformatted("Paste a code below:");
+        ImGui.TextDisabled("Imported AoEs start in danger orange; colours can be edited afterwards.");
         UiHelpers.InputMultiline("##import-code", ref importBuffer, new Vector2(-1, 90 * UiHelpers.Scale), 1024 * 512);
 
         if (ImGui.Button("Paste from clipboard", Vector2.Zero))

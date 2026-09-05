@@ -1,8 +1,11 @@
 using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.IO;
 using System.Linq;
 using System.IO.Compression;
 using System.Text;
+using System.Security.Cryptography;
 using Newtonsoft.Json;
 using Shikari.Model;
 
@@ -10,11 +13,13 @@ namespace Shikari.Services;
 
 /// <summary>
 /// Turns a plan into a single line of text that survives Discord, and back again.
-/// Format: <c>RPLAN1:{base64url of gzipped UTF-8 JSON}</c>.
+/// RPLAN1 is gzip JSON. RPLAN2 is a checked, length-prefixed Brotli JSON payload.
 /// </summary>
 public static class ShareCode
 {
     private const string Prefix = "RPLAN1:";
+    private const string CompactPrefix = "RPLAN2:";
+    private const int CompactHeaderBytes = 12; // uint32 LE unpacked length + first 8 SHA256 bytes
     public const int MaximumEncodedCharacters = 1024 * 1024;
     public const int MaximumDecompressedBytes = 4 * 1024 * 1024;
 
@@ -34,7 +39,17 @@ public static class ShareCode
             gzip.Write(raw, 0, raw.Length);
         }
 
-        return Prefix + ToBase64Url(output.ToArray());
+        var legacy = output.ToArray();
+        var compact = new byte[CompactHeaderBytes + BrotliEncoder.GetMaxCompressedLength(raw.Length)];
+        // Quality 6 keeps compression suitable for the editor's periodic size estimate.
+        if (BrotliEncoder.TryCompress(raw, compact.AsSpan(CompactHeaderBytes), out var written, quality: 6, window: 22)
+            && CompactHeaderBytes + written < legacy.Length)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(compact, raw.Length);
+            SHA256.HashData(raw).AsSpan(0, 8).CopyTo(compact.AsSpan(4, 8));
+            return CompactPrefix + ToBase64Url(compact.AsSpan(0, CompactHeaderBytes + written).ToArray());
+        }
+        return Prefix + ToBase64Url(legacy);
     }
 
     public static bool TryDecode(string? code, out PlanDocument? document, out string error)
@@ -54,7 +69,7 @@ public static class ShareCode
             return false;
         }
 
-        var cleaned = Clean(code);
+        var cleaned = Clean(code, out var isCompact);
         if (cleaned.Length == 0)
         {
             error = "That does not look like a Shikari code.";
@@ -65,18 +80,7 @@ public static class ShareCode
         {
             var compressed = FromBase64Url(cleaned);
 
-            using var input = new MemoryStream(compressed);
-            using var gzip = new GZipStream(input, CompressionMode.Decompress);
-            using var unpacked = new MemoryStream();
-            var buffer = new byte[8192];
-            int count;
-            while ((count = gzip.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                if (unpacked.Length + count > MaximumDecompressedBytes)
-                    throw new InvalidDataException("The unpacked plan exceeds the 4 MiB limit.");
-                unpacked.Write(buffer, 0, count);
-            }
-            var json = Encoding.UTF8.GetString(unpacked.ToArray());
+            var json = isCompact ? UnpackCompact(compressed) : UnpackLegacy(compressed);
 
             var parsed = JsonConvert.DeserializeObject<PlanDocument>(json, Settings);
             if (parsed == null)
@@ -100,6 +104,39 @@ public static class ShareCode
             error = "The code is damaged or incomplete — check that the whole line was copied. " + ex.Message;
             return false;
         }
+    }
+
+    private static string UnpackCompact(byte[] compressed)
+    {
+        if (compressed.Length <= CompactHeaderBytes)
+            throw new InvalidDataException("The compact header is incomplete.");
+        var length = BinaryPrimitives.ReadInt32LittleEndian(compressed);
+        if (length <= 0 || length > MaximumDecompressedBytes)
+            throw new InvalidDataException("The unpacked plan exceeds the 4 MiB limit or has an invalid length.");
+        var raw = new byte[length];
+        using var decoder = new BrotliDecoder();
+        var payload = compressed.AsSpan(CompactHeaderBytes);
+        var status = decoder.Decompress(payload, raw, out var consumed, out var written);
+        if (status != OperationStatus.Done || consumed != payload.Length || written != length ||
+            !SHA256.HashData(raw).AsSpan(0, 8).SequenceEqual(compressed.AsSpan(4, 8)))
+            throw new InvalidDataException("The compact payload is incomplete or its integrity check failed.");
+        return Encoding.UTF8.GetString(raw);
+    }
+
+    private static string UnpackLegacy(byte[] compressed)
+    {
+        using var input = new MemoryStream(compressed);
+        using var gzip = new GZipStream(input, CompressionMode.Decompress);
+        using var unpacked = new MemoryStream();
+        var buffer = new byte[8192];
+        int count;
+        while ((count = gzip.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            if (unpacked.Length + count > MaximumDecompressedBytes)
+                throw new InvalidDataException("The unpacked plan exceeds the 4 MiB limit.");
+            unpacked.Write(buffer, 0, count);
+        }
+        return Encoding.UTF8.GetString(unpacked.ToArray());
     }
 
     private static void ValidateStructure(PlanDocument plan)
@@ -134,10 +171,13 @@ public static class ShareCode
             throw new InvalidDataException("The plan has too many drawing items, points or assignments.");
     }
 
-    private static string Clean(string code)
+    private static string Clean(string code, out bool isCompact)
     {
         var span = code.Trim();
-        var idx = span.IndexOf(Prefix, StringComparison.OrdinalIgnoreCase);
+        var compactIndex = span.IndexOf(CompactPrefix, StringComparison.OrdinalIgnoreCase);
+        var legacyIndex = span.IndexOf(Prefix, StringComparison.OrdinalIgnoreCase);
+        isCompact = compactIndex >= 0 && (legacyIndex < 0 || compactIndex < legacyIndex);
+        var idx = isCompact ? compactIndex : legacyIndex;
         if (idx >= 0)
             span = span[(idx + Prefix.Length)..];
 

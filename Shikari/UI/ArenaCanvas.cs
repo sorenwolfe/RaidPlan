@@ -60,7 +60,17 @@ public sealed class ArenaCanvas
     public CanvasTool Tool { get; set; } = CanvasTool.Select;
 
     /// <summary>Colour applied to newly created items.</summary>
-    public uint BrushColor { get; set; } = 0xFF4FA3FF;
+    private uint drawingBrushColor = 0xFF4FA3FF;
+    private uint aoeBrushColor = CanvasItem.DefaultAoeColor;
+    public uint BrushColor
+    {
+        get => Tool == CanvasTool.Zone ? aoeBrushColor : drawingBrushColor;
+        set
+        {
+            if (Tool == CanvasTool.Zone) aoeBrushColor = value;
+            else drawingBrushColor = value;
+        }
+    }
 
     /// <summary>Zone shape used when the Zone tool places something.</summary>
     public ZoneShape BrushZone { get; set; } = ZoneShape.Circle;
@@ -735,7 +745,7 @@ public sealed class ArenaCanvas
     private void DrawZone(ImDrawListPtr drawList, CanvasItem item)
     {
         var centre = ToScreen(item.Position);
-        var fill = UiHelpers.WithAlpha(item.Color, 0.28f);
+        var fill = item.Color;
         var edge = UiHelpers.WithAlpha(item.Color, 0.9f);
 
         switch (item.Zone)

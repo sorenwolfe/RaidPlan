@@ -98,6 +98,13 @@ public sealed class PlanStore
     /// <summary>Adds an imported plan, giving it a fresh id if one with that id already exists.</summary>
     public PlanDocument Import(PlanDocument doc, bool replaceExisting)
     {
+        // Imports enter the editor with the same danger palette as newly drawn AoEs.
+        // Do this here rather than on load, so subsequent colour edits survive saving.
+        foreach (var slide in doc.Slides)
+            foreach (var item in slide.Items)
+                if (item.Kind == CanvasItemKind.Zone)
+                    item.Color = CanvasItem.DefaultAoeColor;
+
         if (!replaceExisting && plans.ContainsKey(doc.Id))
         {
             doc.Id = Guid.NewGuid().ToString("N");

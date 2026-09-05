@@ -21,7 +21,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File tests/replay-integration.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pwsh -NoProfile -File tests/reliability.ps1
+          pwsh -NoProfile -File tests/sharing.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pwsh -NoProfile -File tests/syntax.ps1
           exit $LASTEXITCODE
