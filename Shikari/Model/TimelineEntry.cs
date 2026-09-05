@@ -90,6 +90,17 @@ public sealed class TimelineEntry
     [DefaultValue(0f)]
     public float SortTime { get; set; }
 
+    /// <summary>Opt-in review checkpoint. A plan position alone is not a mechanic verdict.</summary>
+    [DefaultValue(false)]
+    public bool ReviewCheckpointEnabled { get; set; }
+
+    /// <summary>Seconds relative to the expected cast end (or authored clock anchor).</summary>
+    [DefaultValue(0f)]
+    public float ReviewOffsetSeconds { get; set; }
+
+    [DefaultValue(2f)]
+    public float ReviewRadiusYalms { get; set; } = 2f;
+
     public bool ShouldSerializeAssignments() => Assignments.Count > 0;
 
     public bool ShouldSerializeSlotCallText() => SlotCallText.Count > 0;
@@ -123,6 +134,9 @@ public sealed class TimelineEntry
             SlotCallText = new Dictionary<int, string>(SlotCallText),
             Audience = Audience,
             SortTime = SortTime,
+            ReviewCheckpointEnabled = ReviewCheckpointEnabled,
+            ReviewOffsetSeconds = ReviewOffsetSeconds,
+            ReviewRadiusYalms = ReviewRadiusYalms,
         };
     }
 }

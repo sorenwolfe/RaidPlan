@@ -9,6 +9,39 @@ No second monitor. No alt-tabbing to a website in the middle of a pull.
 
 Type `/shikari` to open it.
 
+## Plan, Live, Review
+
+The studio now has three workspaces. **Plan** keeps the drawing tools, timeline, roster,
+learning, import and sharing together. Pick a mechanic to move to its linked slide, then edit
+its timing and assignments. Undo and redo group a drag or text edit into one change.
+**Live** shows the current strategy and arena alignment. **Review** opens the mechanic replay.
+
+### Mechanic replay
+
+Shikari records locally while you are in combat, even with its windows closed. After the pull,
+open **Review** or type `/shikari review`. Choose an attempt, select a mechanic, and play or scrub
+through the recorded positions over the plan. Filled tokens are planned positions; hollow rings
+are recorded players. Trails show the last five seconds. Choose another attempt to compare the
+same mechanic relative to its cast start. When the saved diagrams differ, the comparison overlay
+is hidden; checkpoint distances still use each attempt's own plan.
+
+Each recording includes the plan as it was at pull start, party names and positions, and observed
+cast anchors. Editing today's plan does not rewrite yesterday's replay. Missing alignment is
+shown as a gap. It never fills missing movement with a guessed route.
+
+For distance observations, select a timeline step in **Plan → Timeline**, enable **Review
+checkpoint**, and set its timing offset and target radius. Put one token per seat on the linked
+slide. Checkpoints are opt-in: old plans remain usable, and a drawing alone is never graded as
+a mechanic failure. Cast endpoints are expected times from the observed cast bar, not confirmed
+damage snapshots. Configure checkpoints before the pull; replay keeps the saved configuration.
+
+Under **Review → Recording & storage**, turn recording off, choose 1–30 retained attempts
+(10 by default), or delete recordings. A pull is limited to 30 minutes at up to ten samples per
+second. Replays stay in the plugin's `replays/` config folder and are not included in share codes.
+
+The redesigned studio uses a slate and sea-glass palette, a compass identity, and persistent
+alignment status in the small combat window. Existing custom accent and theme preferences remain.
+
 ---
 
 ## Installing it

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Shikari.Model;
+using Shikari.Services.Storage;
 
 namespace Shikari.Services;
 
@@ -28,6 +29,7 @@ public sealed class PlanStore
     }
 
     public PlanDocument? Active { get; private set; }
+    public string? LastSaveError { get; private set; }
 
     public IReadOnlyCollection<PlanDocument> All => plans.Values;
 
@@ -122,15 +124,15 @@ public sealed class PlanStore
     public void Delete(PlanDocument doc)
     {
         plans.Remove(doc.Id);
-        var path = PathFor(doc);
         try
         {
+            var path = PathFor(doc);
             if (File.Exists(path))
                 File.Delete(path);
         }
         catch (Exception ex)
         {
-            Plugin.Log.Error(ex, "Could not delete plan file {File}.", path);
+            Plugin.Log.Error(ex, "Could not delete plan {Name}.", doc.Name);
         }
 
         if (Active?.Id == doc.Id)
@@ -140,25 +142,28 @@ public sealed class PlanStore
         }
     }
 
-    public void Save(PlanDocument doc)
+    public bool Save(PlanDocument doc)
     {
+        var previousModified = doc.ModifiedUtc;
         try
         {
+            var path = PathFor(doc);
             doc.ModifiedUtc = DateTime.UtcNow;
             var json = JsonConvert.SerializeObject(doc, Settings);
-            File.WriteAllText(PathFor(doc), json, Encoding.UTF8);
+            AtomicFile.WriteAllText(path, json);
+            LastSaveError = null;
+            return true;
         }
         catch (Exception ex)
         {
+            doc.ModifiedUtc = previousModified;
+            LastSaveError = "Could not save " + doc.Name + ": " + ex.Message;
             Plugin.Log.Error(ex, "Could not save plan {Name}.", doc.Name);
+            return false;
         }
     }
 
-    public void SaveActive()
-    {
-        if (Active != null)
-            Save(Active);
-    }
+    public bool SaveActive() => Active == null || Save(Active);
 
     public void SaveAll()
     {
@@ -166,5 +171,10 @@ public sealed class PlanStore
             Save(doc);
     }
 
-    private string PathFor(PlanDocument doc) => Path.Combine(directory, doc.Id + ".json");
+    private string PathFor(PlanDocument doc)
+    {
+        if (!Guid.TryParseExact(doc.Id, "N", out _))
+            throw new InvalidDataException("A plan id must be a 32-character hexadecimal identifier.");
+        return Path.Combine(directory, doc.Id + ".json");
+    }
 }

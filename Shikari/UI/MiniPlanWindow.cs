@@ -129,7 +129,14 @@ public sealed class MiniPlanWindow : Window, IDisposable
         }
 
         var side = Math.Clamp(Plugin.Config.MiniPlanSize, Configuration.MiniPlanMinSize, Configuration.MiniPlanMaxSize) * UiHelpers.Scale;
-        noteText = CurrentNotes();
+        var activePlan = Plugin.Plans.Active;
+        var activeSlide = activePlan != null && activePlan.Slides.Count > 0
+            ? activePlan.Slides[Math.Clamp(Plugin.Main.SlideIndex, 0, activePlan.Slides.Count - 1)] : null;
+        var aligned = activePlan != null && Plugin.Tracker.TryAlign(activePlan, activeSlide, out _);
+        var status = Plugin.Config.ShowLivePositions
+            ? (aligned ? "LIVE / ALIGNED" : "LIVE / ALIGNMENT UNAVAILABLE") : "PLAN / LIVE POSITIONS OFF";
+        var notes = CurrentNotes();
+        noteText = status + (notes.Length > 0 ? "\n" + notes : string.Empty);
         noteHeight = MeasureNotes(noteText, side);
 
         ImGui.SetNextWindowSize(new Vector2(side, side + noteHeight), ImGuiCond.Always);

@@ -178,8 +178,14 @@ public sealed partial class MainWindow
             return;
         }
 
-        Plugin.Plans.SaveActive();
+        if (!Plugin.Plans.SaveActive())
+        {
+            importStatus = Plugin.Plans.LastSaveError ?? "Save the current plan before importing another.";
+            importStatusIsError = true;
+            return;
+        }
         Plugin.Plans.Import(imported, replaceExisting);
+        MarkDirty();
         slideIndex = 0;
         selectedEntryId = null;
         canvas.Select(null);

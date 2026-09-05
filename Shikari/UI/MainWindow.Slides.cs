@@ -30,7 +30,13 @@ public sealed partial class MainWindow
         // Too narrow for three panes: drop to the canvas alone and put the rest behind the tabs.
         if (inspectorWidth < 140 * UiHelpers.Scale || canvasWidth < minCanvas)
         {
-            DrawCanvasPane(plan);
+            if (ImGui.BeginTabBar("##compact-editor", ImGuiTabBarFlags.None))
+            {
+                if (ImGui.BeginTabItem("Arena", ImGuiTabItemFlags.None)) { DrawCanvasPane(plan); ImGui.EndTabItem(); }
+                if (ImGui.BeginTabItem("Slides", ImGuiTabItemFlags.None)) { DrawSlideList(plan); ImGui.EndTabItem(); }
+                if (ImGui.BeginTabItem("Inspector", ImGuiTabItemFlags.None)) { DrawInspector(plan); ImGui.EndTabItem(); }
+                ImGui.EndTabBar();
+            }
             return;
         }
 
@@ -66,7 +72,12 @@ public sealed partial class MainWindow
 
             var label = $"{i + 1}. {slide.Title}";
             if (ImGui.Selectable(label, i == slideIndex, ImGuiSelectableFlags.None, Vector2.Zero))
+            {
                 SelectSlideManually(i);
+                var selected = plan.Timeline.FirstOrDefault(e => e.Id == selectedEntryId);
+                if (selected?.SlideId != slide.Id)
+                    selectedEntryId = plan.Timeline.FirstOrDefault(e => e.SlideId == slide.Id)?.Id;
+            }
 
             if (ImGui.BeginPopupContextItem("##slide-ctx", ImGuiPopupFlags.MouseButtonRight))
             {

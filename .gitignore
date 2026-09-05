@@ -12,3 +12,4 @@ packages.lock.json
 
 # Local Dalamud reference assemblies, if you keep them beside the project
 /dalamud/
+/.build-home/

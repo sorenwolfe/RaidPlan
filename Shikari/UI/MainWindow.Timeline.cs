@@ -41,6 +41,7 @@ public sealed partial class MainWindow
             else
             {
                 DrawEntryEditor(plan, entry);
+                DrawReviewCheckpointEditor(entry);
             }
         }
 
@@ -87,7 +88,11 @@ public sealed partial class MainWindow
 
             var label = $"{CallTemplate.FormatTime(entry.SortTime)}  {entry.Label}";
             if (ImGui.Selectable(label, entry.Id == selectedEntryId, ImGuiSelectableFlags.None, Vector2.Zero))
+            {
                 selectedEntryId = entry.Id;
+                var linked = plan.IndexOfSlide(entry.SlideId);
+                if (linked >= 0) SelectSlideManually(linked);
+            }
 
             // Bind the context menu to the row, before the tag becomes the last item.
             var rowHovered = ImGui.IsItemHovered();

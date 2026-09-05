@@ -10,6 +10,7 @@ using Shikari.Services.FfLogs;
 using Shikari.Services.Live;
 using Shikari.Services.Speech;
 using Shikari.Services.RaidPlanIo;
+using Shikari.Services.Replay;
 using Shikari.UI;
 using Shikari.UI.World;
 using Shikari.UI.Theme;
@@ -55,6 +56,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static FfLogsAuth FfLogsAuth { get; private set; } = null!;
     internal static PlanFetcher PlanFetcher { get; private set; } = null!;
     internal static ThemeFonts Fonts { get; private set; } = null!;
+    internal static ReplayStore Replays { get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("Shikari");
 
@@ -131,6 +133,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Director.SlideRequested += mainWindow.OnDirectedSlide;
         Director.ResetRequested += mainWindow.OnDirectedReset;
+        Replays = new ReplayStore();
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
@@ -190,6 +193,11 @@ public sealed class Plugin : IDalamudPlugin
             case "config":
             case "settings":
                 configWindow.Toggle();
+                break;
+
+            case "review":
+            case "replay":
+                mainWindow.OpenReview();
                 break;
 
             case "calls":
@@ -290,6 +298,7 @@ public sealed class Plugin : IDalamudPlugin
         Safely(() => Director.ResetRequested -= mainWindow.OnDirectedReset, "detach the slide reset");
 
         Safely(Director.Dispose, "shut down the slide director");
+        Safely(() => Replays?.Dispose(), "finish mechanic recording");
         Safely(Reminders.Dispose, "shut down the reminder engine");
 
         // Before the windows, so a line still being spoken is cut off rather than left talking

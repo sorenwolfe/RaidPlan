@@ -14,6 +14,18 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: Replay and persistence regressions
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File tests/replay.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File tests/replay-integration.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File tests/reliability.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File tests/syntax.ps1
+          exit $LASTEXITCODE
+
       # An invalid workflow file does not fail — it simply never runs, and nothing anywhere says
       # so. A `secrets` reference inside a step `if:` is rejected at parse time and takes the whole
       # file with it, which is how several tagged releases quietly produced nothing at all.

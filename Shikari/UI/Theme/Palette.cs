@@ -9,17 +9,17 @@ namespace Shikari.UI.Theme;
 /// </summary>
 public static class Palette
 {
-    public const uint Window = 0x080A0F;
-    public const uint Panel = 0x0F131B;
-    public const uint PanelRaised = 0x141A26;
-    public const uint Hover = 0x1E2635;
+    public const uint Window = 0x0B1217;
+    public const uint Panel = 0x111D24;
+    public const uint PanelRaised = 0x192A33;
+    public const uint Hover = 0x243E48;
     public const uint Pressed = 0x0E121A;
 
     public const uint Text = 0xE8ECF4;
     public const uint TextMuted = 0x93A0B8;
-    public const uint TextDim = 0x5F6B80;
+    public const uint TextDim = 0x9BAAB5;
 
-    public const uint DefaultAccent = 0x6E8BFF;
+    public const uint DefaultAccent = 0x6DE2CD;
     public const uint Attention = 0xFFB74A;
     public const uint Good = 0x3FD8C0;
     public const uint Danger = 0xFF6B7A;

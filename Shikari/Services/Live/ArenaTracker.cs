@@ -143,23 +143,36 @@ public sealed class ArenaTracker
     }
 
     /// <summary>Where everyone actually is, on the board. Empty when it cannot be worked out.</summary>
-    public IReadOnlyList<LivePlayer> Read(PlanDocument plan, Slide? slide)
+    public IReadOnlyList<LivePlayer> Read(PlanDocument plan, Slide? slide, int? localSlotOverride = null)
     {
         if (!TryAlign(plan, slide, out var alignment))
             return Array.Empty<LivePlayer>();
 
         var localName = Plugin.ObjectTable.LocalPlayer?.Name.TextValue ?? string.Empty;
+        var pinned = localSlotOverride ?? Plugin.Config.GetActiveTeam().PinnedSlotIndex;
         var players = new List<LivePlayer>(8);
 
         foreach (var (name, jobId, world) in ReadPositions())
         {
-            var seat = RosterResolver.MatchSeat(plan.Roster, name, jobId, -1);
+            var isLocal = !string.IsNullOrEmpty(localName) && name.Equals(localName, StringComparison.OrdinalIgnoreCase);
+            var seat = RosterResolver.MatchSeat(plan.Roster, name, jobId, isLocal ? pinned : -1);
             players.Add(new LivePlayer(
                 name,
                 jobId,
                 seat,
                 alignment.ToPlan(world),
-                name.Equals(localName, StringComparison.OrdinalIgnoreCase)));
+                isLocal));
+        }
+
+        // A seat represents one person. Preserve the local resolution used by callouts;
+        // other collisions remain unassigned instead of guessing from party-list order.
+        var collisions = players.Where(p => p.SlotIndex >= 0)
+            .GroupBy(p => p.SlotIndex).Where(group => group.Count() > 1)
+            .Select(group => group.Key).ToHashSet();
+        for (var i = 0; i < players.Count; i++)
+        {
+            if (collisions.Contains(players[i].SlotIndex) && !players[i].IsLocal)
+                players[i] = players[i] with { SlotIndex = -1 };
         }
 
         return players;

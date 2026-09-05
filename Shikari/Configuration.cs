@@ -97,6 +97,9 @@ public sealed class TeamProfile
 
 public sealed class Configuration : IPluginConfiguration
 {
+    public bool ReplayEnabled { get; set; } = true;
+    public int ReplayRetention { get; set; } = 10;
+
     public int Version { get; set; } = 1;
 
     /// <summary>Id of the plan currently loaded in the planner window.</summary>

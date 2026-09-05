@@ -151,7 +151,7 @@ public sealed partial class MainWindow : Window, IDisposable
             Plugin.Director.NotifyManualChange();
     }
 
-    private void MarkDirty() => dirty = true;
+    private void MarkDirty() { dirty = true; editOccurred = true; }
 
     public override void Update()
     {
@@ -162,10 +162,12 @@ public sealed partial class MainWindow : Window, IDisposable
         if ((DateTime.UtcNow - lastSaveUtc).TotalSeconds < 2)
             return;
 
-        Plugin.Plans.SaveActive();
-        Plugin.SaveConfig();
         lastSaveUtc = DateTime.UtcNow;
-        dirty = false;
+        if (Plugin.Plans.SaveActive())
+        {
+            Plugin.SaveConfig();
+            dirty = false;
+        }
     }
 
     public override void OnClose()
@@ -173,9 +175,11 @@ public sealed partial class MainWindow : Window, IDisposable
         if (!dirty)
             return;
 
-        Plugin.Plans.SaveActive();
-        Plugin.SaveConfig();
-        dirty = false;
+        if (Plugin.Plans.SaveActive())
+        {
+            Plugin.SaveConfig();
+            dirty = false;
+        }
     }
 
     public override void Draw()
@@ -197,55 +201,9 @@ public sealed partial class MainWindow : Window, IDisposable
             return;
         }
 
-        DrawHeader(plan);
-        ImGui.Separator();
-
-        if (!ImGui.BeginTabBar("##shikari-tabs", ImGuiTabBarFlags.None))
-            return;
-
-        if (Tab(FontAwesomeIcon.ChalkboardTeacher, "Slides"))
-        {
-            DrawSlidesTab(plan);
-            ImGui.EndTabItem();
-        }
-
-        if (Tab(FontAwesomeIcon.Stream, "Timeline"))
-        {
-            DrawTimelineTab(plan);
-            ImGui.EndTabItem();
-        }
-
-        if (Tab(FontAwesomeIcon.Users, "Roster"))
-        {
-            DrawRosterTab(plan);
-            ImGui.EndTabItem();
-        }
-
-        if (Tab(FontAwesomeIcon.ShareAlt, "Share"))
-        {
-            DrawShareTab(plan);
-            ImGui.EndTabItem();
-        }
-
-        if (Tab(FontAwesomeIcon.Bolt, "Live"))
-        {
-            DrawLiveTab(plan);
-            ImGui.EndTabItem();
-        }
-
-        if (Tab(FontAwesomeIcon.FileImport, "Import"))
-        {
-            DrawImportTab(plan);
-            ImGui.EndTabItem();
-        }
-
-        if (Tab(FontAwesomeIcon.ChartLine, "Learned"))
-        {
-            DrawLearnedTab(plan);
-            ImGui.EndTabItem();
-        }
-
-        ImGui.EndTabBar();
+        BeginPlanEditFrame(plan);
+        DrawWorkspace(plan);
+        EndPlanEditFrame(plan);
     }
 
     /// <summary>
@@ -359,10 +317,12 @@ public sealed partial class MainWindow : Window, IDisposable
 
             if (ImGui.Selectable(label + "##" + doc.Id, doc.Id == current.Id, ImGuiSelectableFlags.None, Vector2.Zero))
             {
-                Plugin.Plans.SaveActive();
-                Plugin.Plans.SetActive(doc);
-                slideIndex = 0;
-                canvas.Select(null);
+                if (Plugin.Plans.SaveActive())
+                {
+                    Plugin.Plans.SetActive(doc);
+                    slideIndex = 0;
+                    canvas.Select(null);
+                }
             }
 
             if (!ImGui.IsItemHovered())
@@ -375,16 +335,23 @@ public sealed partial class MainWindow : Window, IDisposable
 
         if (ImGui.Selectable("New plan…", false, ImGuiSelectableFlags.None, Vector2.Zero))
         {
-            Plugin.Plans.SaveActive();
-            Plugin.Plans.CreateNew("New plan");
-            slideIndex = 0;
+            if (Plugin.Plans.SaveActive())
+            {
+                Plugin.Plans.CreateNew("New plan");
+                slideIndex = 0;
+                MarkDirty();
+            }
         }
 
         if (ImGui.Selectable("Duplicate this plan", false, ImGuiSelectableFlags.None, Vector2.Zero))
         {
-            var copy = Plugin.Plans.Duplicate(current);
-            Plugin.Plans.SetActive(copy);
-            slideIndex = 0;
+            if (Plugin.Plans.SaveActive())
+            {
+                var copy = Plugin.Plans.Duplicate(current);
+                Plugin.Plans.SetActive(copy);
+                slideIndex = 0;
+                MarkDirty();
+            }
         }
 
         if (Plugin.Plans.All.Count > 1 && ImGui.Selectable("Delete this plan", false, ImGuiSelectableFlags.None, Vector2.Zero))

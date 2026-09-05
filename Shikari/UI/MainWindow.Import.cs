@@ -272,6 +272,12 @@ public sealed partial class MainWindow
         }
 
         imported!.Name = name;
+        if (!Plugin.Plans.SaveActive())
+        {
+            planFileFailed = true;
+            planFileStatus = Plugin.Plans.LastSaveError ?? "Save the current plan before importing another.";
+            return;
+        }
         Plugin.Plans.Import(imported, replaceExisting: false);
 
         slideIndex = 0;

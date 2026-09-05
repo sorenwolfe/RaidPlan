@@ -15,6 +15,8 @@ namespace Shikari.Services;
 public static class ShareCode
 {
     private const string Prefix = "RPLAN1:";
+    public const int MaximumEncodedCharacters = 1024 * 1024;
+    public const int MaximumDecompressedBytes = 4 * 1024 * 1024;
 
     private static readonly JsonSerializerSettings Settings = PlanJson.Compact();
 
@@ -46,6 +48,12 @@ public static class ShareCode
             return false;
         }
 
+        if (code.Length > MaximumEncodedCharacters)
+        {
+            error = "The share code is too large (maximum 1 MiB of text).";
+            return false;
+        }
+
         var cleaned = Clean(code);
         if (cleaned.Length == 0)
         {
@@ -59,8 +67,16 @@ public static class ShareCode
 
             using var input = new MemoryStream(compressed);
             using var gzip = new GZipStream(input, CompressionMode.Decompress);
-            using var reader = new StreamReader(gzip, Encoding.UTF8);
-            var json = reader.ReadToEnd();
+            using var unpacked = new MemoryStream();
+            var buffer = new byte[8192];
+            int count;
+            while ((count = gzip.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                if (unpacked.Length + count > MaximumDecompressedBytes)
+                    throw new InvalidDataException("The unpacked plan exceeds the 4 MiB limit.");
+                unpacked.Write(buffer, 0, count);
+            }
+            var json = Encoding.UTF8.GetString(unpacked.ToArray());
 
             var parsed = JsonConvert.DeserializeObject<PlanDocument>(json, Settings);
             if (parsed == null)
@@ -75,6 +91,7 @@ public static class ShareCode
                 return false;
             }
 
+            ValidateStructure(parsed);
             document = PlanNormaliser.Normalise(parsed);
             return true;
         }
@@ -83,6 +100,38 @@ public static class ShareCode
             error = "The code is damaged or incomplete — check that the whole line was copied. " + ex.Message;
             return false;
         }
+    }
+
+    private static void ValidateStructure(PlanDocument plan)
+    {
+        if ((plan.Roster?.Count ?? 0) > 48 || (plan.Slides?.Count ?? 0) > 256 ||
+            (plan.Timeline?.Count ?? 0) > 4096)
+            throw new InvalidDataException("The plan has too many seats, slides or timeline entries.");
+        long items = 0, points = 0, assignments = 0;
+        if (plan.Roster?.Any(slot => slot == null) == true)
+            throw new InvalidDataException("The roster contains an empty seat entry.");
+        if (plan.Slides != null)
+            foreach (var slide in plan.Slides)
+            {
+                if (slide == null) throw new InvalidDataException("The plan contains an empty slide entry.");
+                items += slide.Items?.Count ?? 0;
+                if (slide.Items == null) continue;
+                foreach (var item in slide.Items)
+                {
+                    if (item == null) throw new InvalidDataException("A slide contains an empty drawing entry.");
+                    points += item.Points?.Count ?? 0;
+                }
+            }
+        if (plan.Timeline != null)
+            foreach (var entry in plan.Timeline)
+            {
+                if (entry == null) throw new InvalidDataException("The timeline contains an empty entry.");
+                assignments += entry.Assignments?.Count ?? 0;
+                if (entry.Assignments?.Any(a => a == null) == true || (entry.SlotCallText?.Count ?? 0) > 48)
+                    throw new InvalidDataException("The timeline contains invalid assignments or too many seat calls.");
+            }
+        if (items > 16384 || points > 131072 || assignments > 32768)
+            throw new InvalidDataException("The plan has too many drawing items, points or assignments.");
     }
 
     private static string Clean(string code)
