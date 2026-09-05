@@ -36,7 +36,7 @@ public sealed partial class MainWindow
 
         DrawHeader(plan);
         ImGui.Spacing();
-        var tools = new[] { "Slides", "Timeline", "Roster", "Learned", "Import", "Share" };
+        var tools = new[] { "Slides", "Timeline", "Roster", "Learned", "Import", "Share", "Adaptive" };
         for (var i = 0; i < tools.Length; i++)
         {
             if (i > 0) UiHelpers.SameLineIfRoom(UiHelpers.ButtonWidth(tools[i]));
@@ -69,6 +69,7 @@ public sealed partial class MainWindow
                 case 3: DrawLearnedTab(plan); break;
                 case 4: DrawImportTab(plan); break;
                 case 5: DrawShareTab(plan); break;
+                case 6: DrawAdaptiveTab(plan); break;
             }
         }
         ImGui.EndChild();
@@ -102,6 +103,7 @@ public sealed partial class MainWindow
         ImGui.TextUnformatted(plan.Name);
         ImGui.TextDisabled(Plugin.Encounter.InCombat ? "PULL IN PROGRESS" : "READY FOR THE NEXT PULL");
         DrawFollowIndicator();
+        ImGui.TextWrapped(Plugin.Adaptive.Status);
         var slide = CurrentSlide;
         var aligned = Plugin.Tracker.TryAlign(plan, slide, out var fit);
         ImGui.TextColored(Palette.Vec(aligned ? Palette.Good : Palette.Attention),
@@ -182,6 +184,8 @@ public sealed partial class MainWindow
         plan.Name = restored.Name; plan.Encounter = restored.Encounter; plan.Author = restored.Author;
         plan.Notes = restored.Notes; plan.Arena = restored.Arena; plan.Roster = restored.Roster;
         plan.Slides = restored.Slides; plan.Timeline = restored.Timeline;
+        plan.AdaptiveMechanics = restored.AdaptiveMechanics;
+        plan.FormatVersion = restored.FormatVersion;
         canvas.Select(null); dirty = true; pendingBefore = null;
         frameBefore = JsonConvert.SerializeObject(plan);
     }

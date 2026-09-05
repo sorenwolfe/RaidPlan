@@ -16,6 +16,13 @@ public static class PlanNormaliser
         doc.Roster ??= new List<PlayerSlot>();
         doc.Slides ??= new List<Slide>();
         doc.Timeline ??= new List<TimelineEntry>();
+        doc.AdaptiveMechanics ??= new List<AdaptiveMechanic>();
+        doc.AdaptiveMechanics.RemoveAll(r => r == null);
+        foreach (var rule in doc.AdaptiveMechanics)
+        {
+            rule.Branches ??= new List<StatusBranch>();
+            rule.Branches.RemoveAll(b => b == null);
+        }
 
         if (doc.Slides.Count == 0)
             doc.Slides.Add(new Slide { Title = "Slide 1" });

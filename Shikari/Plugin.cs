@@ -11,6 +11,7 @@ using Shikari.Services.Live;
 using Shikari.Services.Speech;
 using Shikari.Services.RaidPlanIo;
 using Shikari.Services.Replay;
+using Shikari.Services.Adaptive;
 using Shikari.UI;
 using Shikari.UI.World;
 using Shikari.UI.Theme;
@@ -57,6 +58,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static PlanFetcher PlanFetcher { get; private set; } = null!;
     internal static ThemeFonts Fonts { get; private set; } = null!;
     internal static ReplayStore Replays { get; private set; } = null!;
+    internal static AdaptiveService Adaptive { get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("Shikari");
 
@@ -111,6 +113,7 @@ public sealed class Plugin : IDalamudPlugin
         Learner = new EncounterLearner();
         Reminders = new ReminderEngine();
         Director = new SlideDirector();
+        Adaptive = new AdaptiveService();
         FfLogs = new FfLogsClient();
         FfLogsAuth = new FfLogsAuth();
         PlanFetcher = new PlanFetcher();
@@ -299,6 +302,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Safely(Director.Dispose, "shut down the slide director");
         Safely(() => Replays?.Dispose(), "finish mechanic recording");
+        Safely(() => Adaptive?.Dispose(), "stop adaptive mechanics");
         Safely(Reminders.Dispose, "shut down the reminder engine");
 
         // Before the windows, so a line still being spoken is cut off rather than left talking

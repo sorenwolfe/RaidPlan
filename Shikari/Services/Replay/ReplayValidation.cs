@@ -15,6 +15,11 @@ public static class ReplayValidation
             attempt.Plan.Slides.Any(s => s == null || s.Items == null || s.Items.Any(i => i == null || i.Points == null)) ||
             attempt.Plan.Roster.Any(r => r == null) || attempt.Plan.Timeline.Any(e => e == null)) return false;
         var last = -1f;
+        if (attempt.StatusObservations == null || attempt.AdaptiveDecisions == null ||
+            attempt.StatusObservations.Count > 4096 || attempt.AdaptiveDecisions.Count > 1024 ||
+            attempt.StatusObservations.Any(s => s == null || !float.IsFinite(s.Time) || s.Time < 0 || s.Time > attempt.Duration ||
+                !float.IsFinite(s.Duration) || s.Duration < 0) ||
+            attempt.AdaptiveDecisions.Any(d => d == null || !float.IsFinite(d.Time) || d.Time < 0 || d.Time > attempt.Duration)) return false;
         foreach (var frame in attempt.Frames)
         {
             if (frame == null || !float.IsFinite(frame.Time) || frame.Time < 0 || frame.Time <= last || frame.Time > attempt.Duration ||

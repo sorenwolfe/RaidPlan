@@ -41,10 +41,15 @@ public sealed class ArenaSettings
 /// <summary>A complete strategy sheet: roster, slides and timeline.</summary>
 public sealed class PlanDocument
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
 
-    [DefaultValue(CurrentFormatVersion)]
-    public int FormatVersion { get; set; } = CurrentFormatVersion;
+    private int formatVersion = 1;
+    [DefaultValue(1)]
+    public int FormatVersion
+    {
+        get => AdaptiveMechanics is { Count: > 0 } ? Math.Max(2, formatVersion) : formatVersion;
+        set => formatVersion = value;
+    }
 
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
@@ -70,6 +75,9 @@ public sealed class PlanDocument
     public List<Slide> Slides { get; set; } = new();
 
     public List<TimelineEntry> Timeline { get; set; } = new();
+
+    public List<AdaptiveMechanic> AdaptiveMechanics { get; set; } = new();
+    public bool ShouldSerializeAdaptiveMechanics() => AdaptiveMechanics.Count > 0;
 
     public bool ShouldSerializeTimeline() => Timeline.Count > 0;
 

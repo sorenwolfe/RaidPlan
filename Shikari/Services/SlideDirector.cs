@@ -12,6 +12,7 @@ public enum SlideChangeReason
     StepFired,
     Wipe,
     Manual,
+    AdaptiveStatus,
 }
 
 /// <summary>
@@ -22,6 +23,8 @@ public enum SlideChangeReason
 public sealed class SlideDirector : IDisposable
 {
     private DateTime suppressedUntilUtc = DateTime.MinValue;
+    private uint adaptiveAction;
+    private int adaptiveOccurrence;
 
     public SlideDirector()
     {
@@ -53,8 +56,19 @@ public sealed class SlideDirector : IDisposable
     /// <summary>Hands control straight back to the automation.</summary>
     public void ClearSuppression() => suppressedUntilUtc = DateTime.MinValue;
 
+    public bool RequestAdaptive(string slideId, uint action, int occurrence)
+    {
+        if (!Plugin.Config.AutoAdvanceSlides || IsSuppressed || Plugin.Plans.Active?.FindSlide(slideId) == null)
+            return false;
+        adaptiveAction = action;
+        adaptiveOccurrence = occurrence;
+        SlideRequested?.Invoke(slideId, SlideChangeReason.AdaptiveStatus);
+        return true;
+    }
+
     private void OnCombatStarted()
     {
+        adaptiveAction = 0;
         ClearSuppression();
 
         if (Plugin.Config.AutoAdvanceSlides)
@@ -63,6 +77,7 @@ public sealed class SlideDirector : IDisposable
 
     private void OnWiped()
     {
+        adaptiveAction = 0;
         // A wipe is exactly when you want the top of the plan, override or not.
         ClearSuppression();
 
@@ -72,6 +87,9 @@ public sealed class SlideDirector : IDisposable
 
     private void OnStepFired(TimelineEntry entry)
     {
+        // A delayed generic call for this cast must not replace its observed assignment.
+        if (adaptiveAction != 0 && entry.CastActionId == adaptiveAction &&
+            (entry.Occurrence == 0 || entry.Occurrence == adaptiveOccurrence)) return;
         if (!Plugin.Config.AutoAdvanceSlides || IsSuppressed)
             return;
 
@@ -81,6 +99,8 @@ public sealed class SlideDirector : IDisposable
 
     private void OnCastStarted(CastEvent evt)
     {
+        if (evt.ActionId == adaptiveAction && evt.Occurrence != adaptiveOccurrence)
+            adaptiveAction = 0;
         if (!Plugin.Config.AutoAdvanceSlides || !Plugin.Config.AutoAdvanceOnCast || IsSuppressed)
             return;
 

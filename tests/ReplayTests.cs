@@ -76,6 +76,19 @@ public static class ReplayTests
         attempt.Frames[1].BoardPerYalm = .025f;
         attempt.Version = 999;
         Check(!ReplayValidation.IsValid(attempt), "Future replay format rejected");
+        var adaptive = new ReplayAttempt { Duration = 1, TerritoryId = 1 };
+        var adaptiveSlide = new Slide { Id = "branch" };
+        adaptiveSlide.Items.Add(new CanvasItem { Kind = CanvasItemKind.PlayerToken, SlotIndex = 0, Position = new(.6f, .5f) });
+        adaptive.Plan.Slides.Add(adaptiveSlide);
+        adaptive.Plan.Timeline.Add(new TimelineEntry { Id = "adaptive-entry", ReviewCheckpointEnabled = true });
+        adaptive.Plan.AdaptiveMechanics.Add(new AdaptiveMechanic { Enabled = true, TerritoryId = 1, AnchorActionId = 100 });
+        adaptive.Frames.Add(Frame(.2f, true, "branch"));
+        var checkpoint = new ReplayMechanic { EntryId = "adaptive-entry", ActionId = 100, Occurrence = 1, SlideId = "static", ExpectedResolve = .2f };
+        Check(ReplayPlayback.DistanceAt(adaptive, checkpoint, 0) == null, "Missing adaptive decision cannot score a static fallback");
+        adaptive.AdaptiveDecisions.Add(new AdaptiveDecision { Time = .1f, AnchorActionId = 100, Occurrence = 1, SlideId = "branch", Applied = true });
+        Check(ReplayPlayback.DistanceAt(adaptive, checkpoint, 0).HasValue, "Checkpoint resolves recorded branch instead of static slide");
+        adaptive.AdaptiveDecisions[0].Applied = false;
+        Check(ReplayPlayback.DistanceAt(adaptive, checkpoint, 0) == null, "Suppressed branch is not scored as applied");
         Console.WriteLine($"PASS: {checks} replay assertions");
     }
 }

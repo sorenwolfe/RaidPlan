@@ -38,6 +38,17 @@ namespace Shikari
         public static FakeRoster Roster { get; } = new();
         public static FakeMain Main { get; } = new();
         public static FakeLog Log { get; } = new();
+        public static FakeAdaptive Adaptive { get; } = new();
+    }
+    public sealed class FakeAdaptive
+    {
+        public event Action<StatusObservation>? Observed;
+        public event Action<AdaptiveDecision>? Decided;
+        public void Emit()
+        {
+            Observed?.Invoke(new StatusObservation { StatusId = 10, Duration = 30 });
+            Decided?.Invoke(new AdaptiveDecision { Mechanic = "Assignment", Reason = "Long duration", Applied = true });
+        }
     }
     public sealed class FakeInterface { public string Directory = ""; public string GetPluginConfigDirectory() => Directory; }
     public sealed class FakeConfig { public bool ReplayEnabled = true; public int ReplayRetention = 10; }
@@ -85,6 +96,7 @@ namespace Shikari.Tests
                 Check(store.Recording, "Recording starts without drawing a window");
                 Plugin.Framework.Tick();
                 Plugin.Encounter.Cast();
+                Plugin.Adaptive.Emit();
                 Thread.Sleep(120);
                 Plugin.Framework.Tick();
                 Plugin.Encounter.End();
@@ -92,6 +104,7 @@ namespace Shikari.Tests
                 var attempt = store.Attempts[0];
                 Check(attempt.Frames.Count == 2, "Framework records positions without UI");
                 Check(attempt.Mechanics.Count == 1, "Cast anchor recorded");
+                Check(attempt.StatusObservations.Count == 1 && attempt.AdaptiveDecisions.Count == 1, "Adaptive evidence recorded");
                 id = attempt.Id;
             }
             Check(System.IO.File.Exists(System.IO.Path.Combine(directory, "replays", id + ".json")), "Replay persisted");
@@ -99,6 +112,7 @@ namespace Shikari.Tests
             {
                 for (int i = 0; i < 100 && store.Attempts.Count == 0; i++) { Thread.Sleep(10); Plugin.Framework.Tick(); }
                 Check(store.Attempts.Count == 1, "Persisted replay loads");
+                Check(store.Attempts[0].StatusObservations.Count == 1 && store.Attempts[0].AdaptiveDecisions[0].Reason == "Long duration", "Adaptive evidence survives disk reload");
                 Plugin.Encounter.Begin(); Plugin.Framework.Tick(); Plugin.ClientState.Change();
                 Check(!store.Recording && store.Attempts.Count == 2, "Zone change closes recording");
                 store.Clear();

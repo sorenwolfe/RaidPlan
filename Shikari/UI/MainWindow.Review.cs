@@ -120,6 +120,7 @@ public sealed partial class MainWindow
             if (reviewTime >= attempt.Duration) reviewPlaying = false;
         }
         DrawReviewTransport(attempt);
+        DrawAdaptiveEvidence(attempt);
         if (attempt.Mechanics.Count > 0 && SelectedReviewMechanic(attempt)?.Time != reviewTime)
             reviewMechanicIndex = Math.Max(0, attempt.Mechanics.FindLastIndex(m => m.Time <= reviewTime));
 

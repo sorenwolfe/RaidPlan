@@ -72,7 +72,20 @@ try {
     $token = [Shikari.Model.CanvasItem]::new()
     $token.Color = 456
     $plan.Slides[0].Items.Add($token)
+    $rule = [Shikari.Model.AdaptiveMechanic]::new()
+    $rule.Enabled = $true; $rule.TerritoryId = 1; $rule.AnchorActionId = 100; $rule.Occurrence = 0
+    $branch = [Shikari.Model.StatusBranch]::new()
+    $branch.StatusId = 10; $branch.Parameter = 0; $branch.SlideId = $plan.Slides[0].Id
+    $rule.Branches.Add($branch); $plan.AdaptiveMechanics.Add($rule)
+    Assert ([Shikari.Services.ShareCode]::TryDecode([Shikari.Services.ShareCode]::Encode($plan), [ref]$decoded, [ref]$errorText)) 'Adaptive sharing failed'
+    Assert ($decoded.FormatVersion -eq 2) 'Adaptive plan did not declare format 2'
+    Assert ($decoded.AdaptiveMechanics[0].Occurrence -eq 0) 'Every-use occurrence lost during serialization'
+    Assert ($decoded.AdaptiveMechanics[0].Branches[0].Parameter -eq 0) 'Exact zero status parameter became wildcard'
+    Assert ($decoded.AdaptiveMechanics[0].Branches[0].SlideId -eq $plan.Slides[0].Id) 'Branch slide reference lost'
+    $json = [Newtonsoft.Json.JsonConvert]::SerializeObject($plan, [Shikari.Services.PlanJson]::Compact())
+    Assert ($json.Contains('"FormatVersion":2')) 'Wire format version omitted; old clients could silently drop rules'
     $null = $store.Import($plan, $false)
+    Assert (!$plan.AdaptiveMechanics[0].Enabled) 'Imported automation was enabled without review'
     Assert ($plan.Slides[0].Items[0].Color -eq [Shikari.Model.CanvasItem]::DefaultAoeColor) 'Imported AoE not orange'
     Assert ($token.Color -eq 456) 'Import recolored a player token'
     $plan.Slides[0].Items[0].Color = 789
@@ -86,3 +99,4 @@ try {
     Remove-Item -LiteralPath $resolved -Recurse -Force
 }
 Write-Host 'PASS: legacy and compact formats, references, Unicode, integrity, size bounds, backdrops, import colors and saved overrides'
+Write-Host 'PASS: adaptive format version, occurrence zero, exact parameter zero, branch references, disabled imported rules'

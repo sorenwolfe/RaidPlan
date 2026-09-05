@@ -36,11 +36,19 @@ public static class ReplayPlayback
     {
         var entry = attempt.Plan.Timeline.FirstOrDefault(e => e.Id == mechanic.EntryId);
         if (entry == null || !entry.ReviewCheckpointEnabled || slot < 0) return null;
-        var frame = FrameAt(attempt, mechanic.ExpectedResolve + entry.ReviewOffsetSeconds);
-        if (frame == null || !float.IsFinite(frame.BoardPerYalm) || frame.BoardPerYalm <= 0 || frame.SlideId != mechanic.SlideId)
+        var checkpointTime = mechanic.ExpectedResolve + entry.ReviewOffsetSeconds;
+        var branch = attempt.AdaptiveDecisions.LastOrDefault(d => d.Applied && d.AnchorActionId != 0 &&
+            d.AnchorActionId == mechanic.ActionId && d.Occurrence == mechanic.Occurrence &&
+            d.Time >= mechanic.Time && d.Time <= checkpointTime && !string.IsNullOrEmpty(d.SlideId));
+        var adaptiveCheckpoint = attempt.Plan.AdaptiveMechanics?.Any(r => r.Enabled && r.TerritoryId == attempt.TerritoryId &&
+            r.AnchorActionId == mechanic.ActionId && (r.Occurrence == 0 || r.Occurrence == mechanic.Occurrence)) == true;
+        if (adaptiveCheckpoint && branch == null) return null;
+        var targetSlide = branch?.SlideId ?? mechanic.SlideId;
+        var frame = FrameAt(attempt, checkpointTime);
+        if (frame == null || !float.IsFinite(frame.BoardPerYalm) || frame.BoardPerYalm <= 0 || frame.SlideId != targetSlide)
             return null;
         var players = frame.Players.Where(p => p.SlotIndex == slot).ToArray();
-        var targets = attempt.Plan.FindSlide(mechanic.SlideId)?.Items
+        var targets = attempt.Plan.FindSlide(targetSlide)?.Items
             .Where(i => i.Kind == CanvasItemKind.PlayerToken && i.SlotIndex == slot).ToArray();
         if (players.Length != 1 || targets?.Length != 1) return null;
         var distance = Vector2.Distance(players[0].Board, targets[0].Position) / frame.BoardPerYalm;

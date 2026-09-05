@@ -16,6 +16,8 @@ public sealed class ReplayAttempt
     public uint TerritoryId { get; set; }
     public List<ReplayFrame> Frames { get; set; } = new();
     public List<ReplayMechanic> Mechanics { get; set; } = new();
+    public List<StatusObservation> StatusObservations { get; set; } = new();
+    public List<AdaptiveDecision> AdaptiveDecisions { get; set; } = new();
     public float Duration { get; set; }
     public string EndReason { get; set; } = "Ended";
 }

@@ -98,6 +98,8 @@ public sealed class PlanStore
     /// <summary>Adds an imported plan, giving it a fresh id if one with that id already exists.</summary>
     public PlanDocument Import(PlanDocument doc, bool replaceExisting)
     {
+        foreach (var rule in doc.AdaptiveMechanics)
+            rule.Enabled = false;
         // Imports enter the editor with the same danger palette as newly drawn AoEs.
         // Do this here rather than on load, so subsequent colour edits survive saving.
         foreach (var slide in doc.Slides)

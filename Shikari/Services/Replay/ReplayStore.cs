@@ -43,6 +43,24 @@ public sealed class ReplayStore : IDisposable
         Plugin.Encounter.CastStarted += Cast;
         Plugin.ClientState.TerritoryChanged += TerritoryChanged;
         Plugin.Framework.Update += Update;
+        Plugin.Adaptive.Observed += ObserveStatus;
+        Plugin.Adaptive.Decided += RecordDecision;
+    }
+
+    private void ObserveStatus(StatusObservation observation)
+    {
+        if (buffer == null || buffer.Attempt.StatusObservations.Count >= 4096) return;
+        buffer.Attempt.StatusObservations.Add(new StatusObservation { Time = (float)clock.Elapsed.TotalSeconds,
+            StatusId = observation.StatusId, Duration = observation.Duration, Parameter = observation.Parameter, SourceId = observation.SourceId });
+    }
+
+    private void RecordDecision(AdaptiveDecision decision)
+    {
+        if (buffer == null || buffer.Attempt.AdaptiveDecisions.Count >= 1024) return;
+        buffer.Attempt.AdaptiveDecisions.Add(new AdaptiveDecision { Time = (float)clock.Elapsed.TotalSeconds,
+            AnchorActionId = decision.AnchorActionId, Occurrence = decision.Occurrence,
+            Mechanic = decision.Mechanic, SlideId = decision.SlideId, Reason = decision.Reason,
+            Applied = decision.Applied, Navigation = decision.Navigation });
     }
 
     private void Begin()
@@ -145,6 +163,8 @@ public sealed class ReplayStore : IDisposable
         clock.Stop();
         if (completed == null) return;
         completed.Mechanics.RemoveAll(m => m.Time > completed.Duration);
+        completed.StatusObservations.RemoveAll(s => s.Time > completed.Duration);
+        completed.AdaptiveDecisions.RemoveAll(d => d.Time > completed.Duration);
         attempts.Insert(0, completed);
         Queue(() =>
         {
@@ -232,6 +252,8 @@ public sealed class ReplayStore : IDisposable
     {
         disposed = true;
         Plugin.Framework.Update -= Update;
+        Plugin.Adaptive.Observed -= ObserveStatus;
+        Plugin.Adaptive.Decided -= RecordDecision;
         Plugin.Encounter.CombatStarted -= Begin;
         Plugin.Encounter.CombatEnded -= End;
         Plugin.Encounter.Wiped -= Wipe;

@@ -141,6 +141,9 @@ public static class ShareCode
 
     private static void ValidateStructure(PlanDocument plan)
     {
+        if ((plan.AdaptiveMechanics?.Count ?? 0) > 128 ||
+            plan.AdaptiveMechanics?.Any(r => r == null || r.Branches == null || r.Branches.Count > 16 || r.Branches.Any(b => b == null)) == true)
+            throw new InvalidDataException("Invalid adaptive mechanic rules or too many branches.");
         if ((plan.Roster?.Count ?? 0) > 48 || (plan.Slides?.Count ?? 0) > 256 ||
             (plan.Timeline?.Count ?? 0) > 4096)
             throw new InvalidDataException("The plan has too many seats, slides or timeline entries.");
